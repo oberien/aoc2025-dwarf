@@ -1,0 +1,48 @@
+@rodata input_day0 {
+    include_file "inputs/day0"
+}
+
+; count number of 'X' in the input
+@fn day0 {
+    constu 0 ; count
+    constu 0 ; index
+
+.loop:
+    dup
+    addr input_day0.len
+    deref
+    ge
+    bra .end
+
+    dup
+    addr input_day0
+    plus
+    deref_size 1
+
+    constu 'X'
+    ne
+    bra .continue
+
+    swap
+    constu 1
+    plus
+    swap
+
+.continue:
+    constu 1
+    plus
+
+    skip .loop
+.end:
+    drop
+.endend:
+}
+
+@fn test2 {
+    constu 42
+    constu 1
+    bra .end
+.end:
+    nop
+.end2:
+}
