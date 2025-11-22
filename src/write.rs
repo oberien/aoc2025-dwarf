@@ -76,7 +76,7 @@ impl DwarfProgram {
             address_size: 8,
         });
         let root = dwarf.unit.get_mut(dwarf.unit.root());
-        root.set(gimli::DW_AT_name, AttributeValue::String("aoc2025-dwarf".into()));
+        root.set(gimli::DW_AT_name, AttributeValue::String(env!("CARGO_PKG_NAME").into()));
         root.set(
             gimli::DW_AT_language,
             AttributeValue::Language(gimli::DW_LANG_C11),

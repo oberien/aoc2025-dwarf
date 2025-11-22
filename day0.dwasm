@@ -38,10 +38,28 @@
 .endend:
 }
 
+@rodata testrodata {
+    u64 0x0102030405060708
+}
+@fn test1 {
+    addr testrodata
+    deref
+    addr testrodata.len
+    deref
+}
+
 @fn test2 {
     constu 42
     constu 1
     bra .end
+.end:
+}
+
+@fn test3 {
+    constu 0
+    constu 1
+    bra .end
+    skip .end2
 .end:
     nop
 .end2:

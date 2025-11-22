@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+clap = { version = "4.5.53", features = ["derive"] }
+ignore = "0.4.25"
 gimli = "0.32.3"
-object = { version = "0.37.3", features = ["write_core"] }
+object = { version = "0.38.0", features = ["write_core"] }
 chumsky = "0.11.2"
 ariadne = "0.6.0"
 itertools = "0.14.0"
