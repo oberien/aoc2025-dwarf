@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use gimli::{DW_AT_location, DW_AT_name, DieReference, Dwarf, EndianSlice, EvaluationResult, LittleEndian, UnitOffset, Value};
+use gimli::{DW_AT_location, DW_AT_name, DieReference, Dwarf, EndianSlice, EvaluationResult, LittleEndian, Location, Piece, UnitOffset, Value};
 use gimli::write::{RelocateWriter, Relocation, RelocationTarget, Writer};
 use crate::dwarf_program::{DwarfProgram, RodataData};
 
@@ -24,7 +24,7 @@ impl Rodata {
 }
 
 impl DwarfProgram {
-    pub fn run(mut self, die_name: String) {
+    pub fn run(mut self, die_name: String) -> Value {
         let mut sections = self.write_sections().unwrap();
 
         let mut rodata = Rodata::new();
@@ -105,8 +105,13 @@ impl DwarfProgram {
                     Err(e) => panic!("error evaluating expression: {e:?}"),
                 };
             }
-            println!("{:?}", evaluation.result());
-            return;
+            let res = evaluation.result();
+            assert_eq!(res.len(), 1);
+            let Piece { size_in_bits, bit_offset, location } = res[0];
+            assert_eq!(size_in_bits, None);
+            assert_eq!(bit_offset, None);
+            let Location::Value { value } = location else { panic!("invalid location {location:?}") };
+            return value;
         }
         panic!("DIE {die_name} not found");
     }

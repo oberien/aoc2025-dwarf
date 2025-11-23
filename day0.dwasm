@@ -1,9 +1,9 @@
 @rodata input_day0 {
-    include_file "inputs/day0"
+    @include_file "inputs/day0"
 }
 
 ; count number of 'X' in the input
-@fn day0 {
+@var day0 {
     constu 0 ; count
     constu 0 ; index
 
@@ -39,27 +39,27 @@
 }
 
 @rodata testrodata {
-    u64 0x0102030405060708
+    @u64 0x0102030405060708
 }
-@fn test0 {
+@proc test0 {
     addr testrodata
     deref
 }
-@fn test1 {
+@var test1 {
     call test0
     addr testrodata.len
     deref
     plus
 }
 
-@fn test2 {
+@var test2 {
     constu 42
     constu 1
     bra .end
 .end:
 }
 
-@fn test3 {
+@var test3 {
     constu 0
     constu 1
     bra .end

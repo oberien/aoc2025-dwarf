@@ -27,6 +27,8 @@ enum Command {
     #[default]
     Compile,
     Run {
+        #[clap(short = 'x')]
+        hex: bool,
         die: String,
     },
 }
@@ -64,8 +66,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let output = output_file.unwrap_or_else(|| PathBuf::from(format!("{}.o", env!("CARGO_PKG_NAME"))));
             program.write_to_file(output)?;
         }
-        Command::Run { die } => {
-            program.run(die);
+        Command::Run { die, hex } => {
+            let res = program.run(die);
+            match hex {
+                true => println!("{res:#x?}"),
+                false => println!("{res:#?}"),
+            }
         }
     }
 

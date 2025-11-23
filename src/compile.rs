@@ -4,7 +4,8 @@ use crate::dwarf_program::DwarfProgram;
 use crate::parse::{DefineData, Instruction, Item};
 
 struct Functions<'a> {
-    function_entries: HashMap<&'a str, UnitEntryId>,
+    procedures: HashMap<&'a str, UnitEntryId>,
+    variables: HashMap<&'a str, UnitEntryId>,
 }
 struct FunctionContext<'a> {
     control_flow_targets: Vec<(usize, &'a str)>,
@@ -18,14 +19,19 @@ pub fn compile(program: &mut DwarfProgram, items: Vec<Item<'_>>) {
 
 fn first_pass<'a>(program: &mut DwarfProgram, items: &Vec<Item<'a>>) -> Functions<'a> {
     let mut context = Functions {
-        function_entries: HashMap::new(),
+        procedures: HashMap::new(),
+        variables: HashMap::new(),
     };
     for item in items {
         match item {
             Item::Rodata { .. } => (),
-            Item::Function { name, body: _ } => {
+            Item::Procedure { name, body: _ } => {
+                let unit = program.add_dwarf_procedure(name.to_string());
+                context.procedures.insert(name, unit);
+            }
+            Item::Variable { name, body: _ } => {
                 let unit = program.add_dwarf_variable(name.to_string());
-                context.function_entries.insert(name, unit);
+                context.variables.insert(name, unit);
             }
         }
     }
@@ -50,7 +56,7 @@ fn second_pass<'a>(program: &mut DwarfProgram, functions: &Functions<'a>, items:
                 program.add_rodata_data(len_name.clone(), data.len().to_ne_bytes().to_vec());
                 program.add_rodata_data(name.to_owned(), data);
             }
-            Item::Function { name, body } => {
+            Item::Procedure { name, body } => {
                 let mut context = FunctionContext {
                     control_flow_targets: Vec::new(),
                     label_locations: HashMap::new(),
@@ -59,8 +65,21 @@ fn second_pass<'a>(program: &mut DwarfProgram, functions: &Functions<'a>, items:
                 for (operation, label) in context.control_flow_targets {
                     expr.set_target(operation, context.label_locations[label]);
                 }
-                let unit = functions.function_entries[name];
-                program.set_variable_expression(unit, expr);
+                let unit = functions.procedures[name];
+                program.set_expression(unit, expr);
+            },
+            Item::Variable { name, body } => {
+                let mut context = FunctionContext {
+                    control_flow_targets: Vec::new(),
+                    label_locations: HashMap::new(),
+                };
+                let mut expr = compile_function(program, functions, &mut context, body);
+                expr.op(gimli::DW_OP_stack_value);
+                for (operation, label) in context.control_flow_targets {
+                    expr.set_target(operation, context.label_locations[label]);
+                }
+                let unit = functions.variables[name];
+                program.set_expression(unit, expr);
             },
         }
     }
@@ -107,11 +126,10 @@ fn compile_function<'a>(program: &mut DwarfProgram, functions: &Functions<'a>, c
             Instruction::Ne => expr.op(gimli::DW_OP_ne),
             Instruction::Skip(label) => context.control_flow_targets.push(( expr.op_skip(), label)),
             Instruction::Bra(label) => context.control_flow_targets.push(( expr.op_bra(), label)),
-            Instruction::Call(name) => expr.op_call(functions.function_entries[name]),
+            Instruction::Call(name) => expr.op_call(functions.procedures[name]),
             Instruction::Nop => expr.op(gimli::DW_OP_nop),
             Instruction::Label(label) => assert!(context.label_locations.insert(label, expr.next_index()).is_none()),
         }
     }
-    expr.op(gimli::DW_OP_stack_value);
     expr
 }

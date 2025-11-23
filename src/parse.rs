@@ -19,7 +19,11 @@ pub enum Item<'a> {
         name: &'a str,
         def_data: Vec<DefineData<'a>>,
     },
-    Function {
+    Procedure {
+        name: &'a str,
+        body: Vec<Instruction<'a>>,
+    },
+    Variable {
         name: &'a str,
         body: Vec<Instruction<'a>>,
     },
@@ -145,8 +149,16 @@ impl Display for Item<'_> {
                 }
                 writeln!(f, "}}")
             }
-            Item::Function { name, body } => {
-                writeln!(f, "@fn {name} {{")?;
+            Item::Procedure { name, body } => {
+                writeln!(f, "@proc {name} {{")?;
+                let mut indented = IndentWriter::new("    ", &mut *f);
+                for instruction in body {
+                    writeln!(indented, "{instruction}")?;
+                }
+                writeln!(f, "}}")
+            },
+            Item::Variable { name, body } => {
+                writeln!(f, "@var {name} {{")?;
                 let mut indented = IndentWriter::new("    ", &mut *f);
                 for instruction in body {
                     writeln!(indented, "{instruction}")?;
@@ -229,10 +241,14 @@ fn items<'a>() -> impl Parser<'a, Vec<Item<'a>>> {
             .ignore_then(label().padded())
             .then(define_data().padded().repeated().collect().delimited_by(just('{'), just('}')))
             .map(|(name, def_data)| Item::Rodata { name, def_data }),
-        just("@fn")
+        just("@proc")
             .ignore_then(label().padded())
             .then(instructions().padded().delimited_by(just('{'), just("}")))
-            .map(|(name, body)| Item::Function { name, body }),
+            .map(|(name, body)| Item::Procedure { name, body }),
+        just("@var")
+            .ignore_then(label().padded())
+            .then(instructions().padded().delimited_by(just('{'), just("}")))
+            .map(|(name, body)| Item::Variable { name, body }),
     )).padded_by(comment().repeated()).padded().repeated().collect()
 }
 
@@ -311,22 +327,22 @@ pub enum DefineData<'a> {
 impl Display for DefineData<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            DefineData::U8(u) => write!(f, "u8 {}", u.iter().join(", ")),
-            DefineData::U16(u) => write!(f, "u16 {}", u.iter().join(", ")),
-            DefineData::U32(u) => write!(f, "u32 {}", u.iter().join(", ")),
-            DefineData::U64(u) => write!(f, "u64 {}", u.iter().join(", ")),
-            DefineData::IncludeFile(path) => write!(f, "include_file \"{path:?}\""),
+            DefineData::U8(u) => write!(f, "@u8 {}", u.iter().join(", ")),
+            DefineData::U16(u) => write!(f, "@u16 {}", u.iter().join(", ")),
+            DefineData::U32(u) => write!(f, "@u32 {}", u.iter().join(", ")),
+            DefineData::U64(u) => write!(f, "@u64 {}", u.iter().join(", ")),
+            DefineData::IncludeFile(path) => write!(f, "@include_file \"{path:?}\""),
         }
     }
 }
 
 fn define_data<'a>() -> impl Parser<'a, DefineData<'a>> {
     choice((
-        just("u8").padded().ignore_then(u8().padded().separated_by(just(',')).collect()).map(DefineData::U8),
-        just("u16").padded().ignore_then(u16().padded().separated_by(just(',')).collect()).map(DefineData::U16),
-        just("u32").padded().ignore_then(u32().padded().separated_by(just(',')).collect()).map(DefineData::U32),
-        just("u64").padded().ignore_then(u64().padded().separated_by(just(',')).collect()).map(DefineData::U64),
-        just("include_file").padded().ignore_then(dqstring()).map(DefineData::IncludeFile),
+        just("@u8").padded().ignore_then(u8().padded().separated_by(just(',')).collect()).map(DefineData::U8),
+        just("@u16").padded().ignore_then(u16().padded().separated_by(just(',')).collect()).map(DefineData::U16),
+        just("@u32").padded().ignore_then(u32().padded().separated_by(just(',')).collect()).map(DefineData::U32),
+        just("@u64").padded().ignore_then(u64().padded().separated_by(just(',')).collect()).map(DefineData::U64),
+        just("@include_file").padded().ignore_then(dqstring()).map(DefineData::IncludeFile),
     ))
 }
 

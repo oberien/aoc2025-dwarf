@@ -47,15 +47,21 @@ impl DwarfProgram {
             .unwrap_or_else(|| panic!("unknown .rodata data `{name}`"))
     }
 
+    pub fn add_dwarf_procedure(&mut self, name: String) -> UnitEntryId {
+        let procedure = self.dwarf.unit.add(self.dwarf.unit.root(), gimli::DW_TAG_dwarf_procedure);
+        let entry = self.dwarf.unit.get_mut(procedure);
+        entry.set(gimli::DW_AT_name, AttributeValue::String(format!("procedure.{name}").into_bytes()));
+        procedure
+    }
     pub fn add_dwarf_variable(&mut self, name: String) -> UnitEntryId {
         let variable = self.dwarf.unit.add(self.dwarf.unit.root(), gimli::DW_TAG_variable);
         let entry = self.dwarf.unit.get_mut(variable);
-        entry.set(gimli::DW_AT_name, AttributeValue::String(name.into_bytes()));
+        entry.set(gimli::DW_AT_name, AttributeValue::String(format!("{name}").into_bytes()));
         entry.set(gimli::DW_AT_external, AttributeValue::Flag(true));
         entry.set(gimli::DW_AT_type, AttributeValue::UnitRef(self.base_types.u64_typ));
         variable
     }
-    pub fn set_variable_expression(&mut self, entry: UnitEntryId, expr: Expression) {
+    pub fn set_expression(&mut self, entry: UnitEntryId, expr: Expression) {
         self.dwarf.unit.get_mut(entry).set(gimli::DW_AT_location, AttributeValue::Exprloc(expr))
     }
     
