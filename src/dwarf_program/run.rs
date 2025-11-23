@@ -74,6 +74,10 @@ impl DwarfProgram {
                 Ok(EvaluationResult::RequiresEntryValue(_)) => panic!("entry value unsupported"),
                 Ok(EvaluationResult::RequiresParameterRef(_)) => panic!("parameter ref unsupported"),
                 Ok(EvaluationResult::RequiresRelocatedAddress(rel)) => {
+                    if rel == 0 {
+                        // handle __debug_stack
+                        println!("{:#?}", &evaluation.stack());
+                    }
                     evaluation.resume_with_relocated_address(rel)
                 },
                 Ok(EvaluationResult::RequiresIndexedAddress { .. }) => panic!("indexed address unsupported"),

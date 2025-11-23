@@ -136,6 +136,10 @@ pub enum Instruction<'a> {
 
     // CUSTOM "INSTRUCTIONS"
     Label(&'a str),
+    /// prints the current value-stack
+    ///
+    /// encoded using DW_OP_addr __debug_stack; DW_OP_drop
+    Debug,
 }
 
 impl Display for Item<'_> {
@@ -209,6 +213,7 @@ impl Display for Instruction<'_> {
             Instruction::Call(name) => write!(f, "call {name}"),
             Instruction::Nop => write!(f, "nop"),
             Instruction::Label(label) => write!(f, "{label}:"),
+            Instruction::Debug => write!(f, "@debug"),
         }
     }
 }
@@ -309,6 +314,7 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> {
         just("call").ignore_then(whitespace()).ignore_then(label()).map(Instruction::Call),
         just("nop").to(Instruction::Nop),
         label().then_ignore(just(':')).map(Instruction::Label),
+        just("@debug").to(Instruction::Debug),
     )))
 }
 

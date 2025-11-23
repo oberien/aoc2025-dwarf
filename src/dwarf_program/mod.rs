@@ -33,7 +33,7 @@ impl DwarfProgram {
 
         Self {
             dwarf,
-            rodata: Vec::new(),
+            rodata: vec![RodataData { name: "__debug_stack".into(), data: vec![0u8; 8] }],
             base_types,
         }
     }

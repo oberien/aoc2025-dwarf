@@ -55,6 +55,7 @@
 @var test2 {
     constu 42
     constu 1
+    @debug
     bra .end
 .end:
 }

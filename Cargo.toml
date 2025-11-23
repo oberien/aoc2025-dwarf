@@ -6,7 +6,9 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.53", features = ["derive"] }
 ignore = "0.4.25"
-gimli = "0.32.3"
+#gimli = "0.32.3"
+#gimli = { path = "./gimli" }
+gimli = { git = "https://github.com/oberien/gimli", rev = "8dbfd31f988be76ffe55ebc889528b2c9095337f" }
 object = { version = "0.38.0", features = ["write_core"] }
 chumsky = "0.11.2"
 ariadne = "0.6.0"

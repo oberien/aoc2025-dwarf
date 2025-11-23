@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use gimli::DW_OP_drop;
 use gimli::write::{Address, Expression, UnitEntryId};
 use crate::dwarf_program::DwarfProgram;
 use crate::parse::{DefineData, Instruction, Item};
@@ -129,6 +130,11 @@ fn compile_function<'a>(program: &mut DwarfProgram, functions: &Functions<'a>, c
             Instruction::Call(name) => expr.op_call(functions.procedures[name]),
             Instruction::Nop => expr.op(gimli::DW_OP_nop),
             Instruction::Label(label) => assert!(context.label_locations.insert(label, expr.next_index()).is_none()),
+            Instruction::Debug => {
+                let data_index = program.rodata_data_index("__debug_stack");
+                expr.op_addr(Address::Symbol { symbol: data_index, addend: 0 });
+                expr.op(DW_OP_drop);
+            }
         }
     }
     expr
