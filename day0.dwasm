@@ -41,11 +41,15 @@
 @rodata testrodata {
     u64 0x0102030405060708
 }
-@fn test1 {
+@fn test0 {
     addr testrodata
     deref
+}
+@fn test1 {
+    call test0
     addr testrodata.len
     deref
+    plus
 }
 
 @fn test2 {

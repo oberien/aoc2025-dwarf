@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use gimli::write::{Address, Expression, UnitEntryId};
+use crate::dwarf_program::DwarfProgram;
 use crate::parse::{DefineData, Instruction, Item};
-use crate::write::DwarfProgram;
 
 struct Functions<'a> {
     function_entries: HashMap<&'a str, UnitEntryId>,
@@ -47,8 +47,8 @@ fn second_pass<'a>(program: &mut DwarfProgram, functions: &Functions<'a>, items:
                     }
                 }
                 let len_name = format!("{name}.len");
-                program.add_rodata_data(len_name.clone(), &data.len().to_ne_bytes());
-                program.add_rodata_data(name.to_owned(), &data);
+                program.add_rodata_data(len_name.clone(), data.len().to_ne_bytes().to_vec());
+                program.add_rodata_data(name.to_owned(), data);
             }
             Item::Function { name, body } => {
                 let mut context = FunctionContext {
@@ -71,8 +71,8 @@ fn compile_function<'a>(program: &mut DwarfProgram, functions: &Functions<'a>, c
     for instruction in instructions {
         match instruction {
             Instruction::Addr(name, addend) => {
-                let symbol = program.rodata_symbol(name);
-                expr.op_addr(Address::Symbol { symbol, addend })
+                let data_index = program.rodata_data_index(name);
+                expr.op_addr(Address::Symbol { symbol: data_index, addend })
             },
             Instruction::Constu(unsigned) => expr.op_constu(unsigned.number),
             Instruction::Consts(signed) => expr.op_consts(signed.number),

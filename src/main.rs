@@ -7,11 +7,11 @@ use clap::Parser;
 use ignore::Walk;
 use crate::compile::compile;
 use crate::parse::parse;
-use crate::write::DwarfProgram;
+use crate::dwarf_program::DwarfProgram;
 
 mod parse;
 mod compile;
-mod write;
+mod dwarf_program;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -22,11 +22,13 @@ struct Args {
     command: Option<Command>,
 }
 
-#[derive(clap::Subcommand, Debug, Clone, Copy, Default)]
+#[derive(clap::Subcommand, Debug, Clone, Default)]
 enum Command {
     #[default]
     Compile,
-    Run,
+    Run {
+        die: String,
+    },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,8 +64,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let output = output_file.unwrap_or_else(|| PathBuf::from(format!("{}.o", env!("CARGO_PKG_NAME"))));
             program.write_to_file(output)?;
         }
-        Command::Run => {
-            unimplemented!()
+        Command::Run { die } => {
+            program.run(die);
         }
     }
 
