@@ -69,3 +69,13 @@
     nop
 .end2:
 }
+
+@var test4 {
+    @if (constu 6) < (constu 6) {
+        constu 1337
+    } @else @if (constu 5) == (constu 3) {
+        constu 42
+    } @else {
+        constu 21
+    }
+}

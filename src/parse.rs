@@ -5,7 +5,7 @@ use std::num::ParseIntError;
 use std::ops::Neg;
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use chumsky::{extra, IterParser, Parser as _};
-use chumsky::prelude::{any, choice, just, one_of, Rich};
+use chumsky::prelude::{any, choice, just, one_of, recursive, Rich};
 use chumsky::text::newline;
 use indent_write::fmt::IndentWriter;
 use itertools::Itertools;
@@ -140,6 +140,18 @@ pub enum Instruction<'a> {
     ///
     /// encoded using DW_OP_addr __debug_stack; DW_OP_drop
     Debug,
+    /// Condition-Lhs, Condition-Op, Condition-Rhs, Then, Else
+    IfElse(Vec<(Vec<Instruction<'a>>, CondOp, Vec<Instruction<'a>>, Vec<Instruction<'a>>)>, Vec<Instruction<'a>>),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CondOp {
+    Lt,
+    Le,
+    Eq,
+    Ge,
+    Gt,
+    Ne,
 }
 
 impl Display for Item<'_> {
@@ -214,6 +226,51 @@ impl Display for Instruction<'_> {
             Instruction::Nop => write!(f, "nop"),
             Instruction::Label(label) => write!(f, "{label}:"),
             Instruction::Debug => write!(f, "@debug"),
+            Instruction::IfElse(ifs, els) => {
+                for (i, (lhs, op, rhs, then)) in ifs.iter().enumerate() {
+                    write!(f, "@if (")?;
+                    for lhs in lhs {
+                        write!(f, "{lhs}, ")?;
+                    }
+                    write!(f, ") {op} (")?;
+                    for rhs in rhs {
+                        write!(f, "{rhs}, ")?;
+                    }
+                    writeln!(f, ") {{")?;
+                    let mut indented = IndentWriter::new("    ", &mut *f);
+                    for then in then {
+                        writeln!(indented, "{then}")?;
+                    }
+                    write!(f, "}}")?;
+                    if i < ifs.len() - 1 {
+                        write!(f, " @else ")?;
+                    } else {
+                        writeln!(f)?;
+                    }
+                }
+                if !els.is_empty() {
+                    writeln!(f, " else {{")?;
+                    let mut indented = IndentWriter::new("    ", &mut *f);
+                    for els in els {
+                        writeln!(indented, "{els}")?;
+                    }
+                    writeln!(f, "}}")?;
+                }
+                Ok(())
+            },
+        }
+    }
+}
+
+impl Display for CondOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CondOp::Lt => write!(f, "<"),
+            CondOp::Le => write!(f, "<="),
+            CondOp::Eq => write!(f, "=="),
+            CondOp::Ge => write!(f, ">="),
+            CondOp::Gt => write!(f, ">"),
+            CondOp::Ne => write!(f, "!="),
         }
     }
 }
@@ -248,29 +305,29 @@ fn items<'a>() -> impl Parser<'a, Vec<Item<'a>>> {
             .map(|(name, def_data)| Item::Rodata { name, def_data }),
         just("@proc")
             .ignore_then(label().padded())
-            .then(instructions().padded().delimited_by(just('{'), just("}")))
+            .then(instructions(instruction()).padded().delimited_by(just('{'), just("}")))
             .map(|(name, body)| Item::Procedure { name, body }),
         just("@var")
             .ignore_then(label().padded())
-            .then(instructions().padded().delimited_by(just('{'), just("}")))
+            .then(instructions(instruction()).padded().delimited_by(just('{'), just("}")))
             .map(|(name, body)| Item::Variable { name, body }),
     )).padded_by(comment().repeated()).padded().repeated().collect()
 }
 
-fn instructions<'a>() -> impl Parser<'a, Vec<Instruction<'a>>> {
-    instruction().padded().padded_by(comment().repeated()).padded().repeated().collect()
+fn instructions<'a>(instruction: impl Parser<'a, Instruction<'a>> + Clone) -> impl Parser<'a, Vec<Instruction<'a>>> + Clone {
+    instruction.padded().padded_by(comment().repeated()).padded().repeated().collect()
 }
 
-fn comment<'a>() -> impl Parser<'a, ()> {
+fn comment<'a>() -> impl Parser<'a, ()> + Clone {
     just(';').then(any().and_is(newline().not()).repeated()).then(newline()).ignored()
 }
 
-fn whitespace<'a>() -> impl Parser<'a, ()> {
+fn whitespace<'a>() -> impl Parser<'a, ()> + Clone {
     chumsky::text::inline_whitespace().at_least(1)
 }
 
-fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> {
-    choice((
+fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
+    recursive(|instruction| choice((
         just("addr").ignore_then(whitespace()).ignore_then(label())
             .then(choice((
                 just('+').padded().ignore_then(u64()).map(|u| u.number as i64),
@@ -315,10 +372,49 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> {
         just("nop").to(Instruction::Nop),
         label().then_ignore(just(':')).map(Instruction::Label),
         just("@debug").to(Instruction::Debug),
-    )))
+        just("@if")
+            .padded().padded_by(comment().repeated())
+            .ignore_then(instruction.clone().padded().separated_by(just(',')).collect::<Vec<_>>().delimited_by(just('('), just(')')))
+            .padded().padded_by(comment().repeated())
+            .then(cond_op().padded())
+            .padded().padded_by(comment().repeated())
+            .then(instruction.clone().padded().separated_by(just(',')).collect::<Vec<_>>().delimited_by(just('('), just(')')))
+            .padded().padded_by(comment().repeated())
+            .then_ignore(just('{').padded())
+            .padded().padded_by(comment().repeated())
+            .then(instructions(instruction.clone()))
+            .padded().padded_by(comment().repeated())
+            .map(|(((lhs, cond_op), rhs), then)| (lhs, cond_op, rhs, then))
+            .padded().padded_by(comment().repeated())
+            .then_ignore(just('}').padded())
+            .padded().padded_by(comment().repeated())
+            .separated_by(just("@else"))
+            .at_least(1)
+            .collect::<Vec<_>>()
+            .then(
+                just("@else")
+                    .padded()
+                    .ignore_then(just('{').padded())
+                    .ignore_then(instructions(instruction.clone()))
+                    .then_ignore(just('}').padded())
+                    .or_not()
+                    .map(Option::unwrap_or_default)
+            ).map(|(ifs, els)| Instruction::IfElse(ifs, els))
+    ))))
 }
 
-fn label<'a>() -> impl Parser<'a, &'a str> {
+fn cond_op<'a>() -> impl Parser<'a, CondOp> + Clone {
+    choice((
+        just('<').to(CondOp::Lt),
+        just("<=").to(CondOp::Le),
+        just("==").to(CondOp::Eq),
+        just(">=").to(CondOp::Ge),
+        just('>').to(CondOp::Gt),
+        just("!=").to(CondOp::Ne),
+    ))
+}
+
+fn label<'a>() -> impl Parser<'a, &'a str> + Clone {
     one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._").repeated().to_slice()
 }
 
@@ -410,14 +506,14 @@ impl Radix {
     }
 }
 
-fn signed<'a, T: FromStrRadix + Neg<Output = T>>() -> impl Parser<'a, (T, Radix)> {
+fn signed<'a, T: FromStrRadix + Neg<Output = T>>() -> impl Parser<'a, (T, Radix)> + Clone {
     just('-').or_not().then(unsigned::<T>())
         .map(|(neg, (number, radix))| (
             if neg.is_some() { -number } else { number },
             radix,
         ))
 }
-fn unsigned<'a, T: FromStrRadix>() -> impl Parser<'a, (T, Radix)> {
+fn unsigned<'a, T: FromStrRadix>() -> impl Parser<'a, (T, Radix)> + Clone {
     choice((
        number_radix(Radix::Hex),
        number_radix(Radix::Oct),
@@ -425,7 +521,7 @@ fn unsigned<'a, T: FromStrRadix>() -> impl Parser<'a, (T, Radix)> {
        number_radix(Radix::Dec),
     ))
 }
-fn number_radix<'a, T: FromStrRadix>(radix: Radix) -> impl Parser<'a, (T, Radix)> {
+fn number_radix<'a, T: FromStrRadix>(radix: Radix) -> impl Parser<'a, (T, Radix)> + Clone {
     let underscore = any().filter(|&c: &char| c == '_');
     let digit = any().filter(move |&c: &char| c.is_digit(radix as u32));
     choice((
@@ -453,7 +549,7 @@ macro_rules! impl_number {
                     <$inner>::try_from(val).unwrap()
                 }
             }
-            fn $inner<'a>() -> impl Parser<'a, $typ> {
+            fn $inner<'a>() -> impl Parser<'a, $typ> + Clone {
                 $f().map(|(number, radix)| $typ { number, radix })
             }
         )*

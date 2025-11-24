@@ -18,6 +18,8 @@ struct Args {
     file: Option<PathBuf>,
     #[clap(short, long = "out", long = "output")]
     output_file: Option<PathBuf>,
+    #[clap(short)]
+    debug: bool,
     #[clap(subcommand)]
     command: Option<Command>,
 }
@@ -34,7 +36,7 @@ enum Command {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let Args { file, output_file, command } = Args::parse();
+    let Args { file, output_file, debug, command } = Args::parse();
     let mut src = String::new();
     match file {
         Some(path) => {
@@ -55,9 +57,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let instructions = parse(&src);
-    // for inst in &instructions {
-    //     println!("{inst}");
-    // }
+    if debug {
+        for inst in &instructions {
+            println!("{inst}");
+        }
+    }
     let mut program = DwarfProgram::new();
     compile(&mut program, instructions);
 
