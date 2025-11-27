@@ -19,6 +19,7 @@ pub enum Item<'a> {
         name: &'a str,
         def_data: Vec<DefineData<'a>>,
     },
+    Type(CustomType<'a>),
     Procedure {
         name: &'a str,
         body: Vec<Instruction<'a>>,
@@ -40,7 +41,7 @@ pub enum Instruction<'a> {
     // DW_OP_addrx
     // DW_OP_constx
 
-    /// TODO: DW_OP_const_type
+    // /// TODO: DW_OP_const_type
     // ConstType(Infallible),
 
     // NOT POSSIBLE for AoC:
@@ -142,6 +143,12 @@ pub enum Instruction<'a> {
     Debug,
     /// Condition-Lhs, Condition-Op, Condition-Rhs, Then, Else
     IfElse(Vec<(Vec<Instruction<'a>>, CondOp, Vec<Instruction<'a>>, Vec<Instruction<'a>>)>, Vec<Instruction<'a>>),
+    /// Create and push a new instance of a custom type
+    Create(CustomTypeInit<'a>),
+    /// Access a (possibly nested) field of a type; type, field-path
+    Access(&'a str, Vec<&'a str>),
+    /// Set a (possibly nested) field of a type to the value on top of the stack (popping it); type, field-path
+    Set(&'a str, Vec<&'a str>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -158,15 +165,16 @@ impl Display for Item<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Item::Rodata { name, def_data: data } => {
-                writeln!(f, "@rodata {name} {{")?;
+                writeln!(f, "#rodata {name} {{")?;
                 let mut indented = IndentWriter::new("    ", &mut *f);
                 for data in data {
                     writeln!(indented, "{data}")?;
                 }
                 writeln!(f, "}}")
             }
+            Item::Type(custom) => write!(f, "#typ {custom}"),
             Item::Procedure { name, body } => {
-                writeln!(f, "@proc {name} {{")?;
+                writeln!(f, "#proc {name} {{")?;
                 let mut indented = IndentWriter::new("    ", &mut *f);
                 for instruction in body {
                     writeln!(indented, "{instruction}")?;
@@ -174,7 +182,7 @@ impl Display for Item<'_> {
                 writeln!(f, "}}")
             },
             Item::Variable { name, body } => {
-                writeln!(f, "@var {name} {{")?;
+                writeln!(f, "#var {name} {{")?;
                 let mut indented = IndentWriter::new("    ", &mut *f);
                 for instruction in body {
                     writeln!(indented, "{instruction}")?;
@@ -225,10 +233,10 @@ impl Display for Instruction<'_> {
             Instruction::Call(name) => write!(f, "call {name}"),
             Instruction::Nop => write!(f, "nop"),
             Instruction::Label(label) => write!(f, "{label}:"),
-            Instruction::Debug => write!(f, "@debug"),
+            Instruction::Debug => write!(f, "#debug"),
             Instruction::IfElse(ifs, els) => {
                 for (i, (lhs, op, rhs, then)) in ifs.iter().enumerate() {
-                    write!(f, "@if (")?;
+                    write!(f, "#if (")?;
                     for lhs in lhs {
                         write!(f, "{lhs}, ")?;
                     }
@@ -243,7 +251,7 @@ impl Display for Instruction<'_> {
                     }
                     write!(f, "}}")?;
                     if i < ifs.len() - 1 {
-                        write!(f, " @else ")?;
+                        write!(f, " #else ")?;
                     } else {
                         writeln!(f)?;
                     }
@@ -258,6 +266,21 @@ impl Display for Instruction<'_> {
                 }
                 Ok(())
             },
+            Instruction::Create(custom_type_init) => Display::fmt(custom_type_init, f),
+            Instruction::Access(typ, path) => {
+                write!(f, "#access {typ}")?;
+                for part in path {
+                    write!(f, ".{part}")?;
+                }
+                Ok(())
+            }
+            Instruction::Set(typ, path) => {
+                write!(f, "#set {typ}")?;
+                for part in path {
+                    write!(f, ".{part}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -299,15 +322,18 @@ pub fn parse(src: &str) -> Vec<Item<'_>> {
 
 fn items<'a>() -> impl Parser<'a, Vec<Item<'a>>> {
     choice((
-        just("@rodata")
+        just("#rodata")
             .ignore_then(label().padded())
             .then(define_data().padded().repeated().collect().delimited_by(just('{'), just('}')))
             .map(|(name, def_data)| Item::Rodata { name, def_data }),
-        just("@proc")
+        just("#type").padded()
+            .ignore_then(custom_type())
+            .map(Item::Type),
+        just("#proc")
             .ignore_then(label().padded())
             .then(instructions(instruction()).padded().delimited_by(just('{'), just("}")))
             .map(|(name, body)| Item::Procedure { name, body }),
-        just("@var")
+        just("#var")
             .ignore_then(label().padded())
             .then(instructions(instruction()).padded().delimited_by(just('{'), just("}")))
             .map(|(name, body)| Item::Variable { name, body }),
@@ -371,14 +397,14 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
         just("call").ignore_then(whitespace()).ignore_then(label()).map(Instruction::Call),
         just("nop").to(Instruction::Nop),
         label().then_ignore(just(':')).map(Instruction::Label),
-        just("@debug").to(Instruction::Debug),
-        just("@if")
+        just("#debug").to(Instruction::Debug),
+        just("#if")
             .padded().padded_by(comment().repeated())
-            .ignore_then(instruction.clone().padded().separated_by(just(',')).collect::<Vec<_>>().delimited_by(just('('), just(')')))
+            .ignore_then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))
             .padded().padded_by(comment().repeated())
             .then(cond_op().padded())
             .padded().padded_by(comment().repeated())
-            .then(instruction.clone().padded().separated_by(just(',')).collect::<Vec<_>>().delimited_by(just('('), just(')')))
+            .then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))
             .padded().padded_by(comment().repeated())
             .then_ignore(just('{').padded())
             .padded().padded_by(comment().repeated())
@@ -388,18 +414,31 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
             .padded().padded_by(comment().repeated())
             .then_ignore(just('}').padded())
             .padded().padded_by(comment().repeated())
-            .separated_by(just("@else"))
+            .separated_by(just("#else"))
             .at_least(1)
             .collect::<Vec<_>>()
             .then(
-                just("@else")
+                just("#else")
                     .padded()
                     .ignore_then(just('{').padded())
                     .ignore_then(instructions(instruction.clone()))
                     .then_ignore(just('}').padded())
                     .or_not()
                     .map(Option::unwrap_or_default)
-            ).map(|(ifs, els)| Instruction::IfElse(ifs, els))
+            ).map(|(ifs, els)| Instruction::IfElse(ifs, els)),
+        just("#create").padded()
+            .ignore_then(custom_type_init())
+            .map(Instruction::Create),
+        just("#access").padded()
+            .ignore_then(just('$').then(ident()).to_slice())
+            .then_ignore(just('.'))
+            .then(ident().separated_by(just('.')).at_least(1).collect())
+            .map(|(typ, path)| Instruction::Access(typ, path)),
+        just("#set").padded()
+            .ignore_then(just('$').then(ident()).to_slice())
+            .then_ignore(just('.'))
+            .then(ident().separated_by(just('.')).at_least(1).collect())
+            .map(|(typ, path)| Instruction::Set(typ, path)),
     ))))
 }
 
@@ -414,8 +453,11 @@ fn cond_op<'a>() -> impl Parser<'a, CondOp> + Clone {
     ))
 }
 
+fn ident<'a>() -> impl Parser<'a, &'a str> + Clone {
+    one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_").repeated().at_least(1).to_slice()
+}
 fn label<'a>() -> impl Parser<'a, &'a str> + Clone {
-    one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._").repeated().to_slice()
+    one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._").repeated().at_least(1).to_slice()
 }
 
 #[derive(Debug, Clone)]
@@ -429,22 +471,22 @@ pub enum DefineData<'a> {
 impl Display for DefineData<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            DefineData::U8(u) => write!(f, "@u8 {}", u.iter().join(", ")),
-            DefineData::U16(u) => write!(f, "@u16 {}", u.iter().join(", ")),
-            DefineData::U32(u) => write!(f, "@u32 {}", u.iter().join(", ")),
-            DefineData::U64(u) => write!(f, "@u64 {}", u.iter().join(", ")),
-            DefineData::IncludeFile(path) => write!(f, "@include_file \"{path:?}\""),
+            DefineData::U8(u) => write!(f, "#u8 {}", u.iter().join(", ")),
+            DefineData::U16(u) => write!(f, "#u16 {}", u.iter().join(", ")),
+            DefineData::U32(u) => write!(f, "#u32 {}", u.iter().join(", ")),
+            DefineData::U64(u) => write!(f, "#u64 {}", u.iter().join(", ")),
+            DefineData::IncludeFile(path) => write!(f, "#include_file \"{path:?}\""),
         }
     }
 }
 
 fn define_data<'a>() -> impl Parser<'a, DefineData<'a>> {
     choice((
-        just("@u8").padded().ignore_then(u8().padded().separated_by(just(',')).collect()).map(DefineData::U8),
-        just("@u16").padded().ignore_then(u16().padded().separated_by(just(',')).collect()).map(DefineData::U16),
-        just("@u32").padded().ignore_then(u32().padded().separated_by(just(',')).collect()).map(DefineData::U32),
-        just("@u64").padded().ignore_then(u64().padded().separated_by(just(',')).collect()).map(DefineData::U64),
-        just("@include_file").padded().ignore_then(dqstring()).map(DefineData::IncludeFile),
+        just("#u8").padded().ignore_then(u8().padded().separated_by(just(',')).collect()).map(DefineData::U8),
+        just("#u16").padded().ignore_then(u16().padded().separated_by(just(',')).collect()).map(DefineData::U16),
+        just("#u32").padded().ignore_then(u32().padded().separated_by(just(',')).collect()).map(DefineData::U32),
+        just("#u64").padded().ignore_then(u64().padded().separated_by(just(',')).collect()).map(DefineData::U64),
+        just("#include_file").padded().ignore_then(dqstring()).map(DefineData::IncludeFile),
     ))
 }
 
@@ -561,4 +603,140 @@ impl_number! {
     unsigned U32 => u32,
     unsigned U64 => u64,
     signed I64 => i64,
+}
+
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub enum Type<'a> {
+    Primitive(Primitive),
+    Custom(&'a str),
+}
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub enum Primitive {
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
+    F32,
+    F64,
+}
+#[derive(Debug, Clone)]
+pub struct CustomType<'a> {
+    pub name: &'a str,
+    pub fields: Vec<(&'a str, Type<'a>)>,
+}
+impl Display for Type<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Primitive(primitive) => Display::fmt(primitive, f),
+            Type::Custom(custom) => Display::fmt(custom, f),
+        }
+    }
+}
+impl Display for Primitive {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Primitive::U8 => write!(f, "$u8"),
+            Primitive::U16 => write!(f, "$u16"),
+            Primitive::U32 => write!(f, "$u32"),
+            Primitive::U64 => write!(f, "$u64"),
+            Primitive::I8 => write!(f, "$i8"),
+            Primitive::I16 => write!(f, "$i16"),
+            Primitive::I32 => write!(f, "$i32"),
+            Primitive::I64 => write!(f, "$i64"),
+            Primitive::F32 => write!(f, "$f32"),
+            Primitive::F64 => write!(f, "$f64"),
+        }
+    }
+}
+impl Display for CustomType<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{} {{", self.name)?;
+        let mut indented = IndentWriter::new("    ", &mut *f);
+        for (name, typ) in &self.fields {
+            writeln!(indented, "{}: {},", name, typ)?;
+        }
+        writeln!(f, "}}")
+    }
+}
+
+fn custom_type<'a>() -> impl Parser<'a, CustomType<'a>> + Clone {
+    just('$').ignore_then(ident()).to_slice()
+        .padded()
+        .then(
+            field_def().separated_by(just(',').padded()).allow_trailing().collect()
+                .delimited_by(just('{'), just('}'))
+        ).map(|(name, fields)| CustomType { name, fields })
+}
+fn field_def<'a>() -> impl Parser<'a, (&'a str, Type<'a>)> + Clone {
+    ident().padded()
+        .then_ignore(just(':').padded())
+        .then(typ().padded())
+}
+fn typ<'a>() -> impl Parser<'a, Type<'a>> + Clone {
+    choice((
+        just("$u8").to(Type::Primitive(Primitive::U8)),
+        just("$u16").to(Type::Primitive(Primitive::U16)),
+        just("$u32").to(Type::Primitive(Primitive::U32)),
+        just("$u64").to(Type::Primitive(Primitive::U64)),
+        just("$i8").to(Type::Primitive(Primitive::I8)),
+        just("$i16").to(Type::Primitive(Primitive::I16)),
+        just("$i32").to(Type::Primitive(Primitive::I32)),
+        just("$i64").to(Type::Primitive(Primitive::I64)),
+        just("$f32").to(Type::Primitive(Primitive::F32)),
+        just("$f64").to(Type::Primitive(Primitive::F64)),
+        just('$').ignore_then(ident()).to_slice().map(Type::Custom),
+    ))
+}
+
+
+#[derive(Debug, Clone)]
+pub enum TypeInit<'a> {
+    Primitive(U64),
+    Custom(CustomTypeInit<'a>),
+}
+#[derive(Debug, Clone)]
+pub struct CustomTypeInit<'a> {
+    pub name: &'a str,
+    pub fields: Vec<(&'a str, TypeInit<'a>)>,
+}
+impl Display for TypeInit<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeInit::Primitive(primitive) => Display::fmt(primitive, f),
+            TypeInit::Custom(custom) => Display::fmt(custom, f),
+        }
+    }
+}
+impl Display for CustomTypeInit<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{} {{", self.name)?;
+        let mut indented = IndentWriter::new("    ", &mut *f);
+        for (name, typ) in &self.fields {
+            writeln!(indented, "{name}: {typ},")?;
+        }
+        writeln!(f, "}}")
+    }
+}
+
+fn custom_type_init<'a>() -> impl Parser<'a, CustomTypeInit<'a>> + Clone {
+    recursive(|custom_type_init| {
+        let typ_init = choice((
+            u64().map(TypeInit::Primitive),
+            custom_type_init.map(TypeInit::Custom),
+        ));
+        let field_init = ident().padded()
+            .then_ignore(just(':').padded())
+            .then(typ_init.padded());
+
+        just('$').ignore_then(ident()).to_slice().padded()
+            .then(
+                field_init.separated_by(just(',').padded()).allow_trailing().collect()
+                    .delimited_by(just('{'), just('}'))
+            )
+            .map(|(name, fields)| CustomTypeInit { name, fields })
+    })
 }

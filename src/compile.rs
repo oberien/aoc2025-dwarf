@@ -1,12 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use gimli::DW_OP_drop;
 use gimli::write::{Address, Expression, UnitEntryId};
 use crate::dwarf_program::DwarfProgram;
-use crate::parse::{CondOp, DefineData, Instruction, Item};
+use crate::parse::{CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, Primitive, Type, TypeInit};
 
 struct GlobalContext<'a> {
     procedures: HashMap<&'a str, UnitEntryId>,
     variables: HashMap<&'a str, UnitEntryId>,
+    custom_types: HashMap<&'a str, CustomType<'a>>,
+    type_dies: HashMap<Type<'a>, UnitEntryId>,
     anonymous_label_number: u64,
 }
 impl GlobalContext<'_> {
@@ -26,25 +28,42 @@ pub fn compile(program: &mut DwarfProgram, items: Vec<Item<'_>>) {
 }
 
 fn first_pass<'a>(program: &mut DwarfProgram, items: &Vec<Item<'a>>) -> GlobalContext<'a> {
-    let mut context = GlobalContext {
+    let mut global_ctx = GlobalContext {
         procedures: HashMap::new(),
         variables: HashMap::new(),
+        custom_types: HashMap::new(),
+        type_dies: HashMap::new(),
         anonymous_label_number: 0,
     };
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::U8), program.add_base_type("u8", 1, gimli::DW_ATE_unsigned));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::U16), program.add_base_type("u16", 2, gimli::DW_ATE_unsigned));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::U32), program.add_base_type("u32", 4, gimli::DW_ATE_unsigned));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::U64), program.add_base_type("u64", 8, gimli::DW_ATE_unsigned));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::I8), program.add_base_type("i8", 1, gimli::DW_ATE_signed));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::I16), program.add_base_type("i16", 2, gimli::DW_ATE_signed));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::I32), program.add_base_type("i32", 4, gimli::DW_ATE_signed));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::I64), program.add_base_type("i64", 8, gimli::DW_ATE_signed));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::F32), program.add_base_type("f32", 4, gimli::DW_ATE_float));
+    global_ctx.type_dies.insert(Type::Primitive(Primitive::F64), program.add_base_type("f64", 8, gimli::DW_ATE_float));
     for item in items {
         match item {
             Item::Rodata { .. } => (),
+            Item::Type(custom_type) => {
+                assert!(global_ctx.custom_types.insert(custom_type.name, custom_type.clone()).is_none());
+                let entry = program.create_base_type(custom_type.name.to_string(), gimli::DW_ATE_unsigned);
+                assert!(global_ctx.type_dies.insert(Type::Custom(custom_type.name), entry).is_none());
+            },
             Item::Procedure { name, body: _ } => {
                 let unit = program.add_dwarf_procedure(name.to_string());
-                context.procedures.insert(name, unit);
+                global_ctx.procedures.insert(name, unit);
             }
             Item::Variable { name, body: _ } => {
                 let unit = program.add_dwarf_variable(name.to_string());
-                context.variables.insert(name, unit);
+                global_ctx.variables.insert(name, unit);
             }
         }
     }
-    context
+    global_ctx
 }
 
 fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a>, items: Vec<Item<'a>>) {
@@ -64,6 +83,12 @@ fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a
                 let len_name = format!("{name}.len");
                 program.add_rodata_data(len_name.clone(), data.len().to_ne_bytes().to_vec());
                 program.add_rodata_data(name.to_owned(), data);
+            }
+            Item::Type(CustomType { name, fields: _ }) => {
+                let size = type_size(Type::Custom(name), global_ctx);
+                assert!(size <= 256, "type {name} larger than 256 bytes");
+                let type_die = global_ctx.type_dies[&Type::Custom(name)];
+                program.set_base_type_size(type_die, size as u8);
             }
             Item::Procedure { name, body } => {
                 let mut context = FunctionContext {
@@ -89,6 +114,7 @@ fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a
                 }
                 let unit = global_ctx.variables[name];
                 program.set_expression(unit, expr);
+                program.set_type(unit, global_ctx.type_dies[&Type::Custom("$Foo")])
             },
         }
     }
@@ -177,14 +203,195 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
                     compile_instruction(expr, program, global_ctx, fn_ctx, inst);
                 }
                 compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Skip(&end_label));
-                compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&next_label))
+                compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&next_label));
             }
             if !els.is_empty() {
                 for inst in els {
                     compile_instruction(expr, program, global_ctx, fn_ctx, inst);
                 }
             }
-            compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&end_label))
+            compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&end_label));
+        }
+        Instruction::Create(custom_type_init) => {
+            let type_die = global_ctx.type_dies[&Type::Custom(custom_type_init.name)];
+            let mut vec = VecDeque::new();
+            init_custom_type(custom_type_init, &mut vec, global_ctx);
+            let data = Vec::from(vec).into_boxed_slice();
+            expr.op_const_type(type_die, data);
+        }
+        Instruction::Set(typ, path) => {
+            let (offset, primitive) = field_offset(typ, &path, global_ctx);
+            let primitive_size = primitive_size(primitive);
+            let type_size = type_size(Type::Custom(typ), global_ctx);
+            let type_die = global_ctx.type_dies[&Type::Custom(typ)];
+            let left_offset = type_size - primitive_size - offset as usize;
+            // mask topmost stack element
+            expr.op_constu(primitive_mask(primitive));
+            expr.op(gimli::DW_OP_and);
+            // convert topmost stack element to our type
+            expr.op_convert(Some(type_die));
+            // shift into correct position
+            expr.op_const_type(type_die, int_to_type_array(left_offset as u64 * 8, type_size));
+            expr.op(gimli::DW_OP_shl);
+            // zero-out our "struct" by ANDing a mask
+            expr.op(gimli::DW_OP_swap);
+            let mut mask = vec![0xffu8; type_size];
+            mask[left_offset..][..primitive_size].fill(0x00);
+            expr.op_const_type(type_die, mask.into_boxed_slice());
+            expr.op(gimli::DW_OP_and);
+            // write field by ORing struct and value
+            expr.op(gimli::DW_OP_or);
+        }
+        Instruction::Access(typ, path) => {
+            let (offset, primitive) = field_offset(typ, &path, global_ctx);
+            let primitive_size = primitive_size(primitive);
+            let type_size = type_size(Type::Custom(typ), global_ctx);
+            let left_offset = type_size as u8 - primitive_size as u8 - offset;
+            let type_die = global_ctx.type_dies[&Type::Custom(typ)];
+            expr.op_const_type(type_die, int_to_type_array(left_offset as u64 * 8, type_size));
+            expr.op(gimli::DW_OP_shr);
+            expr.op_const_type(type_die, int_to_type_array(primitive_mask(primitive), type_size));
+            expr.op(gimli::DW_OP_and);
+            // expr.op_convert(Some(global_ctx.type_dies[&Type::Primitive(primitive)]));
+            expr.op_convert(None);
         }
     }
+}
+
+fn int_to_type_array(val: u64, type_size: usize) -> Box<[u8]> {
+    let mut vec = vec![0u8; type_size];
+    let max_val = if type_size >= 8 {
+        u64::MAX
+    } else {
+        1u64 << (type_size*8) - 1
+    };
+    if val > max_val {
+        panic!("value {val} doesn't fit into type of size {type_size}");
+    }
+    let val = val.to_le_bytes();
+    let len = val.len().min(type_size);
+    vec[..len].copy_from_slice(&val[..len]);
+    vec.into_boxed_slice()
+
+}
+
+fn init_custom_type(init: CustomTypeInit, vec: &mut VecDeque<u8>, global_ctx: &GlobalContext<'_>) {
+    let typ = &global_ctx.custom_types[&init.name];
+    assert_eq!(
+        init.fields.len(), typ.fields.len(),
+        "#create {} has different number of fields: expected {}, found {}",
+        init.name, typ.fields.len(), init.fields.len(),
+    );
+    for ((exname, extyp), (name, value)) in typ.fields.iter().copied().zip(init.fields) {
+        assert_eq!(
+            exname, name,
+            "fields in #create {} have different names / order: expected {}, found {}",
+            init.name, exname, name,
+        );
+        match (extyp, value) {
+            (Type::Primitive(primitive), TypeInit::Primitive(value)) => {
+                let size = primitive_size(primitive);
+                let value = primitive_try_from_u64(primitive, value.number)
+                    .unwrap_or_else(|| panic!("{value} doesn't fit into {primitive}"));
+                for byte in value.to_le_bytes()[..size].iter().copied().rev() {
+                    vec.push_front(byte);
+                }
+            }
+            (Type::Custom(name), TypeInit::Custom(init)) => {
+                assert_eq!(
+                    name, init.name,
+                    "invalid custom type in create: expected {name}, found {}", init.name,
+                );
+                init_custom_type(init, vec, global_ctx);
+            }
+            (ex @ Type::Primitive(_), found @ TypeInit::Custom(_))
+            | (ex @ Type::Custom(_), found @ TypeInit::Primitive(_)) => {
+                panic!("invalid type in create: expected {ex}, found {found}");
+            }
+        }
+    }
+}
+
+fn primitive_mask(primitive: Primitive) -> u64 {
+    match primitive {
+        Primitive::U8 | Primitive::I8 => u8::MAX as u64,
+        Primitive::U16 | Primitive::I16 => u16::MAX as u64,
+        Primitive::U32 | Primitive::I32 | Primitive::F32 => u32::MAX as u64,
+        Primitive::U64 | Primitive::I64 | Primitive::F64 => u64::MAX,
+    }
+}
+fn primitive_try_from_u64(primitive: Primitive, value: u64) -> Option<u64> {
+    match primitive {
+        Primitive::U8 => u8::try_from(value).map(|v| v as u64).ok(),
+        Primitive::U16 => u16::try_from(value).map(|v| v as u64).ok(),
+        Primitive::U32 => u32::try_from(value).map(|v| v as u64).ok(),
+        Primitive::U64 => u64::try_from(value).map(|v| v as u64).ok(),
+        Primitive::I8 => i8::try_from(value).map(|v| v as u64).ok(),
+        Primitive::I16 => i16::try_from(value).map(|v| v as u64).ok(),
+        Primitive::I32 => i32::try_from(value).map(|v| v as u64).ok(),
+        Primitive::I64 => i64::try_from(value).map(|v| v as u64).ok(),
+        Primitive::F32 => unimplemented!(),
+        Primitive::F64 => unimplemented!(),
+    }
+}
+
+fn type_size(typ: Type<'_>, global_ctx: &GlobalContext) -> usize {
+    type_size_internal(typ, global_ctx, &mut Vec::new())
+}
+fn primitive_size(primitive: Primitive) -> usize {
+    match primitive {
+        Primitive::U8 => 1,
+        Primitive::U16 => 2,
+        Primitive::U32 => 4,
+        Primitive::U64 => 8,
+        Primitive::I8 => 1,
+        Primitive::I16 => 2,
+        Primitive::I32 => 4,
+        Primitive::I64 => 8,
+        Primitive::F32 => 4,
+        Primitive::F64 => 8,
+    }
+}
+fn type_size_internal<'a>(typ: Type<'a>, global_ctx: &GlobalContext<'a>, visited_types: &mut Vec<&'a str>) -> usize {
+    match typ {
+        Type::Primitive(primitive) => primitive_size(primitive),
+        Type::Custom(name) => {
+            if visited_types.contains(&name) {
+                panic!("recursive type {name} found in {}", visited_types.join(" -> "));
+            }
+            visited_types.push(name);
+            let size = global_ctx.custom_types[name].fields.iter().copied()
+                .map(|(_name, typ)| type_size_internal(typ, global_ctx, visited_types))
+                .sum();
+            assert_eq!(visited_types.pop(), Some(name));
+            size
+        }
+    }
+}
+fn field_offset(typ: &str, path: &[&str], global_ctx: &GlobalContext<'_>) -> (u8, Primitive) {
+    field_offset_internal(Type::Custom(typ), path, global_ctx)
+}
+fn field_offset_internal(typ: Type<'_>, path: &[&str], global_ctx: &GlobalContext<'_>) -> (u8, Primitive) {
+    let type_name = match typ {
+        Type::Custom(name) => name,
+        Type::Primitive(primitive) => {
+            assert!(path.is_empty(), "field access reached primitive, but field accesses are left: .{}", path.join("."));
+            return (0, primitive)
+        }
+    };
+    let typ = global_ctx.custom_types.get(type_name)
+        .unwrap_or_else(|| panic!("unknown type {type_name}"));
+    if path.is_empty() {
+        panic!("field access path must end with a primitive, but instead ended with non-primitive {type_name}");
+    }
+
+    let mut offset = 0u8;
+    for &(name, typ) in &typ.fields {
+        if name == path[0] {
+            let (o, primitive) = field_offset_internal(typ, &path[1..], global_ctx);
+            return (offset.checked_add(o).unwrap(), primitive);
+        }
+        offset = offset.checked_add(type_size(typ, global_ctx).try_into().unwrap()).unwrap();
+    }
+    panic!("field {} not found in type {type_name}", path[0])
 }
