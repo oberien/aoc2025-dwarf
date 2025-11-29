@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use gimli::{DW_AT_location, DW_AT_name, DieReference, Dwarf, EndianSlice, EvaluationResult, Expression, LittleEndian, Location, Piece, Reader, Unit, UnitOffset, UnitRef, Value};
+use gimli::{DW_AT_byte_size, DW_AT_encoding, DW_AT_location, DW_AT_name, DieReference, DwAte, Dwarf, EndianSlice, EvaluationResult, Expression, LittleEndian, Location, Piece, Reader, Unit, UnitOffset, UnitRef, Value, ValueType};
 use gimli::write::{RelocateWriter, Relocation, RelocationTarget, Sections, Writer};
 use crate::dwarf_program::{DwarfProgram, RodataData};
 use crate::dwarf_program::write::SectionWriter;
@@ -81,7 +81,11 @@ impl DwarfProgram {
                     evaluation.resume_with_relocated_address(rel)
                 },
                 Ok(EvaluationResult::RequiresIndexedAddress { .. }) => panic!("indexed address unsupported"),
-                Ok(EvaluationResult::RequiresBaseType(_)) => panic!("base type unsupported"),
+                Ok(EvaluationResult::RequiresBaseType(offset)) => {
+                    let size = root.entry(offset).unwrap().attr(DW_AT_byte_size).unwrap().unwrap().udata_value().unwrap();
+                    let encoding = DwAte(root.entry(offset).unwrap().attr(DW_AT_encoding).unwrap().unwrap().u8_value().unwrap());
+                    evaluation.resume_with_base_type(ValueType::from_encoding(encoding, size).unwrap())
+                },
                 Err(e) => panic!("error evaluating expression: {e:?}"),
             };
         }

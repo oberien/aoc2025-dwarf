@@ -41,8 +41,8 @@ pub enum Instruction<'a> {
     // DW_OP_addrx
     // DW_OP_constx
 
-    // /// TODO: DW_OP_const_type
-    // ConstType(Infallible),
+    /// typ, data
+    ConstType(Type<'a>, DefineData<'a>),
 
     // NOT POSSIBLE for AoC:
     // * DW_OP_fbreg
@@ -199,7 +199,7 @@ impl Display for Instruction<'_> {
             Instruction::Addr(name, addend) => write!(f, "addr {name}+{addend}"),
             Instruction::Constu(unsigned) => write!(f, "constu {unsigned}"),
             Instruction::Consts(signed) => write!(f, "consts {signed}"),
-            // Instruction::ConstType(_) => todo!(),
+            Instruction::ConstType(typ, data) => write!(f, "const_type {typ}, {data}"),
             Instruction::Dup => write!(f, "dup"),
             Instruction::Drop => write!(f, "drop"),
             Instruction::Pick(index) => write!(f, "pick {index}"),
@@ -362,7 +362,11 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
             .map(|(name, number)| Instruction::Addr(name, number.unwrap_or(0))),
         just("constu").ignore_then(whitespace()).ignore_then(u64()).map(Instruction::Constu),
         just("consts").ignore_then(whitespace()).ignore_then(i64()).map(Instruction::Consts),
-        just("const_type").map(|_| todo!()),
+        just("const_type").ignore_then(whitespace())
+            .ignore_then(typ().padded())
+            .then_ignore(just(','))
+            .then(define_data().padded())
+            .map(|(typ, data)| Instruction::ConstType(typ, data)),
         just("dup").to(Instruction::Dup),
         just("drop").to(Instruction::Drop),
         just("pick").ignore_then(whitespace()).ignore_then(u8()).map(Instruction::Pick),
@@ -466,6 +470,10 @@ pub enum DefineData<'a> {
     U16(Vec<U16>),
     U32(Vec<U32>),
     U64(Vec<U64>),
+    I8(Vec<I8>),
+    I16(Vec<I16>),
+    I32(Vec<I32>),
+    I64(Vec<I64>),
     IncludeFile(Cow<'a, str>),
 }
 impl Display for DefineData<'_> {
@@ -475,22 +483,45 @@ impl Display for DefineData<'_> {
             DefineData::U16(u) => write!(f, "#u16 {}", u.iter().join(", ")),
             DefineData::U32(u) => write!(f, "#u32 {}", u.iter().join(", ")),
             DefineData::U64(u) => write!(f, "#u64 {}", u.iter().join(", ")),
+            DefineData::I8(i) => write!(f, "#i8 {}", i.iter().join(", ")),
+            DefineData::I16(i) => write!(f, "#i16 {}", i.iter().join(", ")),
+            DefineData::I32(i) => write!(f, "#i32 {}", i.iter().join(", ")),
+            DefineData::I64(i) => write!(f, "#i64 {}", i.iter().join(", ")),
             DefineData::IncludeFile(path) => write!(f, "#include_file \"{path:?}\""),
         }
     }
 }
+impl DefineData<'_> {
+    pub fn to_vec(&self) -> Vec<u8> {
+        match self {
+            DefineData::U8(u) => u.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
+            DefineData::U16(u) => u.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
+            DefineData::U32(u) => u.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
+            DefineData::U64(u) => u.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
+            DefineData::I8(i) => i.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
+            DefineData::I16(i) => i.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
+            DefineData::I32(i) => i.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
+            DefineData::I64(i) => i.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
+            DefineData::IncludeFile(path) => std::fs::read(&**path).unwrap(),
+        }
+    }
+}
 
-fn define_data<'a>() -> impl Parser<'a, DefineData<'a>> {
+fn define_data<'a>() -> impl Parser<'a, DefineData<'a>> + Clone {
     choice((
         just("#u8").padded().ignore_then(u8().padded().separated_by(just(',')).collect()).map(DefineData::U8),
         just("#u16").padded().ignore_then(u16().padded().separated_by(just(',')).collect()).map(DefineData::U16),
         just("#u32").padded().ignore_then(u32().padded().separated_by(just(',')).collect()).map(DefineData::U32),
         just("#u64").padded().ignore_then(u64().padded().separated_by(just(',')).collect()).map(DefineData::U64),
+        just("#i8").padded().ignore_then(i8().padded().separated_by(just(',')).collect()).map(DefineData::I8),
+        just("#i16").padded().ignore_then(i16().padded().separated_by(just(',')).collect()).map(DefineData::I16),
+        just("#i32").padded().ignore_then(i32().padded().separated_by(just(',')).collect()).map(DefineData::I32),
+        just("#i64").padded().ignore_then(i64().padded().separated_by(just(',')).collect()).map(DefineData::I64),
         just("#include_file").padded().ignore_then(dqstring()).map(DefineData::IncludeFile),
     ))
 }
 
-fn dqstring<'a>() -> impl Parser<'a, Cow<'a, str>> {
+fn dqstring<'a>() -> impl Parser<'a, Cow<'a, str>> + Clone {
     just('\\').then(any())
         .ignored()
         .or(any().and_is(just('"').not()).ignored())
@@ -602,6 +633,9 @@ impl_number! {
     unsigned U16 => u16,
     unsigned U32 => u32,
     unsigned U64 => u64,
+    signed I8 => i8,
+    signed I16 => i16,
+    signed I32 => i32,
     signed I64 => i64,
 }
 

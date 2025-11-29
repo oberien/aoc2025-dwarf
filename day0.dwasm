@@ -38,68 +38,13 @@
 .endend:
 }
 
-#rodata testrodata {
-    #u64 0x0102030405060708
-}
-#proc test0 {
-    addr testrodata
-    deref
-}
-#var test1 {
-    call test0
-    addr testrodata.len
-    deref
-    plus
-}
-
-#var test2 {
-    constu 42
-    constu 1
-    #debug
-    bra .end
-.end:
-}
-
-#var test3 {
-    constu 0
-    constu 1
-    bra .end
-    skip .end2
-.end:
-    nop
-.end2:
-}
-
-#var test4 {
-    #if (constu 5, constu 1, plus) < (constu 6) {
-        constu 1337
-    } #else #if (constu 5) == (constu 3) {
-        constu 42
-    } #else {
-        constu 21
-    }
-}
-
 #type $Foo {
-    foo: $u16,
-    bar: $Bar,
-}
-#type $Bar {
-    baz: $u8,
+    x: $u8,
+    y: $u8,
 }
 
-#var test5 {
-    #create $Foo {
-        foo: 0x1100,
-        bar: $Bar {
-            baz: 0x42,
-        },
-    }
-    dup
-    #access $Foo.foo
-    pick 1
-    #access $Foo.bar.baz
+#var test1 {
+    const_type $Foo, #u8 0x01, 0x00
+    const_type $i16, #u16 0x1110
     plus
-    #set $Foo.foo
-    #access $Foo.foo
 }

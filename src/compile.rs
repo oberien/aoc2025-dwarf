@@ -70,16 +70,7 @@ fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a
     for item in items {
         match item {
             Item::Rodata { name, def_data } => {
-                let mut data = Vec::new();
-                for def in def_data {
-                    match def {
-                        DefineData::U8(u) => data.extend(u.into_iter().map(|u| u.number)),
-                        DefineData::U16(u) => data.extend(u.into_iter().flat_map(|u| u.number.to_ne_bytes())),
-                        DefineData::U32(u) => data.extend(u.into_iter().flat_map(|u| u.number.to_ne_bytes())),
-                        DefineData::U64(u) => data.extend(u.into_iter().flat_map(|u| u.number.to_ne_bytes())),
-                        DefineData::IncludeFile(path) => data.extend(std::fs::read(&*path).unwrap()),
-                    }
-                }
+                let data: Vec<u8> = def_data.iter().flat_map(DefineData::to_vec).collect();
                 let len_name = format!("{name}.len");
                 program.add_rodata_data(len_name.clone(), data.len().to_ne_bytes().to_vec());
                 program.add_rodata_data(name.to_owned(), data);
@@ -114,7 +105,8 @@ fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a
                 }
                 let unit = global_ctx.variables[name];
                 program.set_expression(unit, expr);
-                program.set_type(unit, global_ctx.type_dies[&Type::Custom("$Foo")])
+                // program.set_type(unit, global_ctx.type_dies[&Type::Custom("$Foo")])
+                program.set_type(unit, global_ctx.type_dies[&Type::Primitive(Primitive::U64)])
             },
         }
     }
@@ -136,7 +128,16 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
         },
         Instruction::Constu(unsigned) => expr.op_constu(unsigned.number),
         Instruction::Consts(signed) => expr.op_consts(signed.number),
-        // Instruction::ConstType(_) => todo!(),
+        Instruction::ConstType(typ, data) => {
+            let data = data.to_vec();
+            let type_die = global_ctx.type_dies[&typ];
+            let size = type_size(typ, global_ctx);
+            assert_eq!(
+                data.len(), size,
+                "const_type type's size differs from provided data: expected {size}, found {}", data.len()
+            );
+            expr.op_const_type(type_die, data.into_boxed_slice());
+        },
         Instruction::Dup => expr.op(gimli::DW_OP_dup),
         Instruction::Drop => expr.op(gimli::DW_OP_drop),
         Instruction::Pick(index) => expr.op_pick(index.number),

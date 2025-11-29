@@ -9,6 +9,8 @@ use crate::compile::compile;
 use crate::parse::parse;
 use crate::dwarf_program::DwarfProgram;
 
+#[cfg(test)]
+mod tests;
 mod parse;
 mod compile;
 mod dwarf_program;
