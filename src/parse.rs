@@ -121,8 +121,10 @@ pub enum Instruction<'a> {
     /// DW_OP_call
     Call(&'a str),
     // NOT RELEVANT for AoC: DW_OP_call_ref
-    // DW_OP_convert
-    // DW_OP_reinterpret
+    /// DW_OP_convert
+    Convert(TypeOrGeneric<'a>),
+    /// DW_OP_reinterpret
+    Reinterpret(TypeOrGeneric<'a>),
     /// DW_OP_nop
     Nop,
     // DW_OP_entry_value
@@ -231,6 +233,8 @@ impl Display for Instruction<'_> {
             Instruction::Skip(label) => write!(f, "skip {label}"),
             Instruction::Bra(label) => write!(f, "bra {label}"),
             Instruction::Call(name) => write!(f, "call {name}"),
+            Instruction::Convert(typ) => write!(f, "convert {typ}"),
+            Instruction::Reinterpret(typ) => write!(f, "reinterpret {typ}"),
             Instruction::Nop => write!(f, "nop"),
             Instruction::Label(label) => write!(f, "{label}:"),
             Instruction::Debug => write!(f, "#debug"),
@@ -399,6 +403,8 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
         just("skip").ignore_then(whitespace()).ignore_then(label()).map(Instruction::Skip),
         just("bra").ignore_then(whitespace()).ignore_then(label()).map(Instruction::Bra),
         just("call").ignore_then(whitespace()).ignore_then(label()).map(Instruction::Call),
+        just("convert").ignore_then(whitespace()).ignore_then(typ_or_generic()).map(Instruction::Convert),
+        just("reinterpret").ignore_then(whitespace()).ignore_then(typ_or_generic()).map(Instruction::Reinterpret),
         just("nop").to(Instruction::Nop),
         label().then_ignore(just(':')).map(Instruction::Label),
         just("#debug").to(Instruction::Debug),
@@ -640,6 +646,11 @@ impl_number! {
 }
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub enum TypeOrGeneric<'a> {
+    Generic,
+    Type(Type<'a>),
+}
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum Type<'a> {
     Primitive(Primitive),
     Custom(&'a str),
@@ -661,6 +672,14 @@ pub enum Primitive {
 pub struct CustomType<'a> {
     pub name: &'a str,
     pub fields: Vec<(&'a str, Type<'a>)>,
+}
+impl Display for TypeOrGeneric<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeOrGeneric::Generic => write!(f, "$generic"),
+            TypeOrGeneric::Type(typ) => Display::fmt(typ, f),
+        }
+    }
 }
 impl Display for Type<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -709,6 +728,12 @@ fn field_def<'a>() -> impl Parser<'a, (&'a str, Type<'a>)> + Clone {
     ident().padded()
         .then_ignore(just(':').padded())
         .then(typ().padded())
+}
+fn typ_or_generic<'a>() -> impl Parser<'a, TypeOrGeneric<'a>> + Clone {
+    choice((
+        just("$generic").to(TypeOrGeneric::Generic),
+        typ().map(TypeOrGeneric::Type),
+    ))
 }
 fn typ<'a>() -> impl Parser<'a, Type<'a>> + Clone {
     choice((

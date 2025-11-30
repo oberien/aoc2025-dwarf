@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use gimli::DW_OP_drop;
 use gimli::write::{Address, Expression, UnitEntryId};
 use crate::dwarf_program::DwarfProgram;
-use crate::parse::{CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, Primitive, Type, TypeInit};
+use crate::parse::{CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, Primitive, Type, TypeInit, TypeOrGeneric};
 
 struct GlobalContext<'a> {
     procedures: HashMap<&'a str, UnitEntryId>,
@@ -169,6 +169,14 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
         Instruction::Skip(label) => fn_ctx.control_flow_targets.push((expr.op_skip(), label.to_string())),
         Instruction::Bra(label) => fn_ctx.control_flow_targets.push((expr.op_bra(), label.to_string())),
         Instruction::Call(name) => expr.op_call(global_ctx.procedures[name]),
+        Instruction::Convert(typ) => expr.op_convert(match typ {
+            TypeOrGeneric::Generic => None,
+            TypeOrGeneric::Type(typ) => Some(global_ctx.type_dies[&typ]),
+        }),
+        Instruction::Reinterpret(typ) => expr.op_reinterpret(match typ {
+            TypeOrGeneric::Generic => None,
+            TypeOrGeneric::Type(typ) => Some(global_ctx.type_dies[&typ]),
+        }),
         Instruction::Nop => expr.op(gimli::DW_OP_nop),
         Instruction::Label(label) => assert!(fn_ctx.label_locations.insert(label.to_string(), expr.next_index()).is_none()),
         Instruction::Debug => {
