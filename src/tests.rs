@@ -12,7 +12,7 @@ fn run(code: &str, expected: Value) {
     let result = program.run("test".to_string());
     assert_eq!(result, expected);
 }
-fn run_gbd(code: &str, expected: &str) {
+fn run_gdb(code: &str, expected: &str) {
     let items = parse(code);
     let mut program = DwarfProgram::new();
     compile(&mut program, items);
@@ -26,7 +26,7 @@ fn run_gbd(code: &str, expected: &str) {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(expected));
+    assert!(stdout.contains(expected), "stdout doesn't contain {expected:?}:\ncode:\n {code}\n\nstdout:\n{stdout}");
 }
 
 #[test]
@@ -155,9 +155,77 @@ fn test_struct() {
 
 #[test]
 fn test_gdb() {
-    run_gbd(r#"
+    run_gdb(r#"
         #var test {
             constu 0x1337
         }
     "#, "$1 = 0x1337")
+}
+
+#[test]
+fn test_gdb_convert() {
+    let int_tests = [
+        // convert to smaller values
+        ("constu 0x1337\nconvert $u8", "0x37"),
+        ("const_type $u16, #u16 0x1337\nconvert $u8", "0x37"),
+        ("const_type $i16, #i16 -0x1337\nconvert $u8", "0x37"),
+        ("const_type $Foo, #u8 0x11, 0x22, 0x33\nconvert $u8", "0x11"),
+        // convert to larger values
+        ("const_type $u8, #u8 0x11\nconvert $u16", "0x11"),
+        ("const_type $u8, #u8 0x11\nconvert $i16", "0x11"),
+        ("const_type $i8, #i8 -0x11\nconvert $i16", "0xffef"),
+        ("const_type $i8, #i8 -0x11\nconvert $u16", "0xffef"),
+        ("const_type $i8, #i8 -0x11\nconvert $Foo", "0xffffef"),
+    ];
+    for (code, result) in int_tests {
+        run_gdb(&format!(r#"
+            #type $Foo {{
+                a: $u8,
+                b: $u8,
+                c: $u8,
+            }}
+            #var test {{
+                {code}
+            }}"#), result);
+    }
+
+    macro_rules! float_test {
+        ($to_test:expr, $typ:literal, $gdb_actual:expr, $rust_actual:expr, $rust_expected:expr) => {
+            ($to_test, $typ, $gdb_actual as u16, $rust_actual as u16, $rust_expected as u16)
+        }
+    }
+    let float_tests = [
+        // (to-test, type, gdb-actual, rust-actual, rust-expected)
+        // inf: 0x7ff0000000000000
+        float_test!(f64::INFINITY, "$u16", u16::MAX, f64::INFINITY as u16, u16::MAX),
+        float_test!(f64::INFINITY, "$i16", -1i16, f64::INFINITY as i16, i16::MAX), // BUG in gdb?
+        // -inf: 0xfff0000000000000
+        float_test!(f64::NEG_INFINITY, "$u16", 0u16, f64::NEG_INFINITY as u16, 0u16),
+        float_test!(f64::NEG_INFINITY, "$i16", 0i16, f64::NEG_INFINITY as i16, i16::MIN), // BUG in gdb?
+        // nan: 0x7ff8000000000000
+        float_test!(f64::NAN, "$u16", u16::MAX, f64::NAN as u16, 0u16), // BUG in gdb?
+        float_test!(f64::NAN, "$i16", -1i16, f64::NAN as i16, 0i16), // BUG in gdb?
+        // max: 0x7fefffffffffffff
+        float_test!(f64::MAX, "$u16", u16::MAX, f64::MAX as u16, u16::MAX),
+        float_test!(f64::MAX, "$i16", -1i16, f64::MAX as i16, i16::MAX), // BUG in gdb?
+        // min: 0xffefffffffffffff
+        float_test!(f64::MIN, "$u16", 0u16, f64::MIN as u16, 0u16),
+        float_test!(f64::MIN, "$i16", 0i16, f64::MIN as i16, i16::MIN), // BUG in gdb?
+        // -0.: 0x8000000000000000
+        float_test!(-0f64, "$u16", 0u16, -0f64 as u16, 0u16),
+        float_test!(-0f64, "$i16", 0i16, -0f64 as i16, 0i16),
+        // 0.: 0x0000000000000000
+        float_test!(0f64, "$u16", 0u16, 0f64 as u16, 0u16),
+        float_test!(0f64, "$i16", 0i16, 0f64 as i16, 0i16),
+    ];
+    for (value, typ, gdb_actual, rust_actual, rust_expected) in float_tests {
+        let value = value.to_bits();
+        assert_eq!(rust_actual, rust_expected);
+        run_gdb(&format!(r#"
+            #var test {{
+                const_type $f64, #u64 {value:#x}
+                convert {typ}
+            }}
+        "#), &format!("{gdb_actual:#x}"));
+    }
 }
