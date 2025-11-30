@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match command.unwrap_or_default() {
         Command::Compile => {
             let output = output_file.unwrap_or_else(|| PathBuf::from(format!("{}.o", env!("CARGO_PKG_NAME"))));
-            program.write_to_file(output)?;
+            program.write_to(File::create(output)?)?;
         }
         Command::Run { die, hex } => {
             let res = program.run(die);

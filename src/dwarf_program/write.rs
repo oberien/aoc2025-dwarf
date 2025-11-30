@@ -1,5 +1,4 @@
-use std::fs::File;
-use std::path::Path;
+use std::io::Write;
 use gimli::LittleEndian;
 use gimli::write::{AttributeValue, EndianVec, RelocateWriter, Relocation, RelocationTarget, Sections, Writer};
 use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
@@ -48,7 +47,7 @@ impl DwarfProgram {
         Ok(sections)
     }
 
-    pub fn write_to_file(mut self, path: impl AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn write_to(mut self, writer: impl Write) -> Result<(), Box<dyn std::error::Error>> {
         let mut sections = self.write_sections()?;
 
 
@@ -128,8 +127,7 @@ impl DwarfProgram {
             Ok(())
         })?;
 
-        let file = File::create(path)?;
-        obj.write_stream(file)?;
+        obj.write_stream(writer)?;
         Ok(())
     }
 }

@@ -1,3 +1,5 @@
+use std::process::Command;
+use tempfile::NamedTempFile;
 use gimli::Value;
 use crate::compile::compile;
 use crate::dwarf_program::DwarfProgram;
@@ -9,6 +11,22 @@ fn run(code: &str, expected: Value) {
     compile(&mut program, items);
     let result = program.run("test".to_string());
     assert_eq!(result, expected);
+}
+fn run_gbd(code: &str, expected: &str) {
+    let items = parse(code);
+    let mut program = DwarfProgram::new();
+    compile(&mut program, items);
+    let file = NamedTempFile::new().unwrap();
+    program.write_to(&file).unwrap();
+    let output = Command::new("gdb")
+        .arg(file.path())
+        .arg("--batch")
+        .arg("-ex")
+        .arg("p/x test")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains(expected));
 }
 
 #[test]
@@ -133,4 +151,13 @@ fn test_struct() {
             #access $Foo.foo
         }
     "#, Value::Generic(0x1142))
+}
+
+#[test]
+fn test_gdb() {
+    run_gbd(r#"
+        #var test {
+            constu 0x1337
+        }
+    "#, "$1 = 0x1337")
 }

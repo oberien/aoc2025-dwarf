@@ -253,7 +253,6 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             expr.op(gimli::DW_OP_shr);
             expr.op_const_type(type_die, int_to_type_array(primitive_mask(primitive), type_size));
             expr.op(gimli::DW_OP_and);
-            // expr.op_convert(Some(global_ctx.type_dies[&Type::Primitive(primitive)]));
             expr.op_convert(None);
         }
     }
