@@ -390,8 +390,8 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
         just("plus").to(Instruction::Plus),
         just("plus_uconst").ignore_then(whitespace()).ignore_then(u64()).map(Instruction::PlusUconst),
         just("shl").to(Instruction::Shl),
-        just("shr").to(Instruction::Shr),
         just("shra").to(Instruction::Shra),
+        just("shr").to(Instruction::Shr),
         just("xor").to(Instruction::Xor),
    )).or(choice((
         just("le").to(Instruction::Le),
