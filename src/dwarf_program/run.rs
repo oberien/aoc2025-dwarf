@@ -82,9 +82,14 @@ impl DwarfProgram {
                 },
                 Ok(EvaluationResult::RequiresIndexedAddress { .. }) => panic!("indexed address unsupported"),
                 Ok(EvaluationResult::RequiresBaseType(offset)) => {
-                    let size = root.entry(offset).unwrap().attr(DW_AT_byte_size).unwrap().unwrap().udata_value().unwrap();
-                    let encoding = DwAte(root.entry(offset).unwrap().attr(DW_AT_encoding).unwrap().unwrap().u8_value().unwrap());
-                    evaluation.resume_with_base_type(ValueType::from_encoding(encoding, size).unwrap())
+                    let typ = if offset.0 == 0 {
+                        ValueType::Generic
+                    } else {
+                        let size = root.entry(offset).unwrap().attr(DW_AT_byte_size).unwrap().unwrap().udata_value().unwrap();
+                        let encoding = DwAte(root.entry(offset).unwrap().attr(DW_AT_encoding).unwrap().unwrap().u8_value().unwrap());
+                        ValueType::from_encoding(encoding, size).unwrap()
+                    };
+                    evaluation.resume_with_base_type(typ)
                 },
                 Err(e) => panic!("error evaluating expression: {e:?}"),
             };
