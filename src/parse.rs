@@ -623,8 +623,19 @@ fn number_radix<'a, T: FromStrRadix>(radix: Radix) -> impl Parser<'a, (T, Radix)
     choice((
         just(radix.prefix()).ignore_then(digit.padded_by(underscore.repeated()).repeated().at_least(1).to_slice()
             .map(move |s: &str| (T::from_str_radix(&s.replace('_', ""), radix as u32).unwrap(), radix))),
+        just('\\')
+            .ignore_then(one_of("'\"\\nrt").map(|c| match c {
+                '\'' => '\'',
+                '"' => '"',
+                '\\' => '\\',
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                _ => unreachable!("{c}"),
+            })).delimited_by(just('\''), just('\''))
+            .map(move |c| (T::from_char(c), radix)),
         any().delimited_by(just('\''), just('\''))
-            .map(move |c| (T::from_char(c), radix))
+            .map(move |c| (T::from_char(c), radix)),
     ))
 }
 
