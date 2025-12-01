@@ -1,5 +1,5 @@
-#rodata input_day0 {
-    #include_file "inputs/day0"
+#rodata day0_input {
+    #include_file "days/inputs/day00"
 }
 
 ; count number of 'X' in the input
@@ -9,13 +9,13 @@
 
 .loop:
     dup
-    addr input_day0.len
+    addr day0_input.len
     deref
     ge
     bra .end
 
     dup
-    addr input_day0
+    addr day0_input
     plus
     deref_size 1
 

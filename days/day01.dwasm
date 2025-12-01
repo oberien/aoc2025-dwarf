@@ -1,0 +1,212 @@
+#rodata day1_sample {
+    #include_file "days/inputs/day01_sample"
+}
+#rodata day1_input {
+    #include_file "days/inputs/day01_input"
+}
+
+#type $Day1 {
+    len: $u64,
+    address: $u64,
+    index: $u64,
+    ; L = -1, R = 1
+    current_sign: $i64,
+    current_number: $i64,
+    zero_count: $u64,
+    click_count: $u64,
+}
+
+#var day1_part1_sample {
+    addr day1_sample
+    addr day1_sample.len
+    deref
+    call day1_part1
+    #access $Day1.zero_count
+}
+#var day1_part1 {
+    addr day1_input
+    addr day1_input.len
+    deref
+    call day1_part1
+    #access $Day1.zero_count
+}
+#var day1_part2_sample {
+    addr day1_sample
+    addr day1_sample.len
+    deref
+    call day1_part1
+    #access $Day1.click_count
+}
+#var day1_part2 {
+    addr day1_input
+    addr day1_input.len
+    deref
+    call day1_part1
+    #access $Day1.click_count
+}
+
+#proc day1_part1 {
+    #create $Day1 {
+        len: 0,
+        address: 0,
+        index: 0,
+        current_sign: 0,
+        current_number: 50,
+        zero_count: 0,
+        click_count: 0,
+    }
+    swap
+    #set $Day1.len
+    swap
+    #set $Day1.address
+.loop:
+    ; find out L / R
+    dup
+    #access $Day1.index
+    pick 1
+    #access $Day1.address
+    plus
+    deref_size 1
+    #if (dup) == (constu 'L') {
+        drop
+        consts -1
+    } #else #if (dup) == (constu 'R') {
+        drop
+        consts 1
+    } #else {
+        consts -2
+        call panic
+    }
+    #set $Day1.current_sign
+    ; increment index
+    dup
+    #access $Day1.index
+    constu 1
+    plus
+    #set $Day1.index
+    ; parse number
+    #create $ParseNumber {
+        number: 0,
+        index: 0,
+        address: 0,
+    }
+    pick 1
+    #access $Day1.address
+    #set $ParseNumber.address
+    pick 1
+    #access $Day1.index
+    #set $ParseNumber.index
+    call parse_number_dec
+
+    ; update index
+    ; $Day1, $ParseNumber
+    dup
+    #access $ParseNumber.index ; -> $Day1, $ParseNumber, index
+    rot ; -> index, $Day1, $ParseNumber
+    rot ; -> $ParseNumber, index, $Day1
+    swap ; -> $ParseNumber, $Day1, index
+    #set $Day1.index ; -> $ParseNumber, $Day1
+    dup
+    #access $Day1.current_sign ; -> $ParseNumber, $Day1, L/R
+    rot ; -> L/R, $ParseNumber, $Day1
+    rot ; -> $Day1, L/R, $ParseNumber
+    #access $ParseNumber.number
+    mul
+    convert $i64
+    #debug
+
+    ; we count 0 -> -5 as 2 rotations (once landing on 0, once modulus-wraparound)
+    ; thus, adjust the count
+    ; but don't fix L500 from 0, which should still be 5 rotations
+    #if (dup) < (const_type $i64, #i64 0) {
+        #if (pick 1, #access $Day1.current_number) == (constu 0) {
+            #if (dup, const_type $i64, #i64 100, mod) != (const_type $i64, #i64 0) {
+                consts -1
+                #debug
+                drop
+                swap
+                dup
+                #access $Day1.click_count
+                constu 1
+                minus
+                #set $Day1.click_count
+                swap
+            }
+        }
+        ; handle 50 L550 -> 6
+        #if (dup, abs, const_type $i64, #i64 100, mod) == (pick 2, #access $Day1.current_number, convert $i64) {
+            swap
+            dup
+            #access $Day1.click_count
+            constu 1
+            plus
+            #set $Day1.click_count
+            swap
+        }
+    }
+
+    ; add to current number and adjust / modulo
+    pick 1
+    #access $Day1.current_number
+    convert $i64
+    plus
+.custom_mod:
+    #if (dup) < (const_type $i64, #i64 0) {
+        constu 1
+        #debug
+        drop
+        const_type $i64, #i64 100
+        plus
+        swap
+        dup
+        #access $Day1.click_count
+        constu 1
+        plus
+        #set $Day1.click_count
+        swap
+    } #else #if (dup) > (const_type $i64, #i64 99) {
+        constu 2
+        #debug
+        drop
+        const_type $i64, #i64 100
+        minus
+        swap
+        dup
+        #access $Day1.click_count
+        constu 1
+        plus
+        #set $Day1.click_count
+        swap
+    } #else {
+        skip .custom_mod_end
+    }
+    skip .custom_mod
+.custom_mod_end:
+    convert $generic
+    #set $Day1.current_number
+    ; check if it's zero and increment zero_count
+    #if (dup, #access $Day1.current_number) == (constu 0) {
+        dup
+        #access $Day1.zero_count
+        constu 1
+        plus
+        #set $Day1.zero_count
+    }
+    ; consume newline
+    #if (dup, #access $Day1.address, pick 1, #access $Day1.index, plus, deref_size 1) != (constu '\n') {
+        consts -1
+        call panic
+    }
+    ; increment index
+    dup
+    #access $Day1.index
+    constu 1
+    plus
+    #set $Day1.index
+    ; check if we reached the end
+    #if (dup, #access $Day1.index) >= (pick 1, #access $Day1.len) {
+        skip .end
+    }
+    skip .loop
+.end:
+}

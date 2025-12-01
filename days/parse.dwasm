@@ -1,0 +1,49 @@
+#type $ParseNumber {
+    number: $u64,
+    index: $u64,
+    address: $u64,
+}
+; Stack before:
+;   $ParseNumber
+; Stack after:
+;   $ParseNumber
+#proc parse_number_dec {
+.loop:
+    ; get input byte
+    dup
+    #access $ParseNumber.address
+    pick 1
+    #access $ParseNumber.index
+    plus
+    deref_size 1
+    ; check if it is a digit
+    dup
+    constu '0'
+    lt
+    bra .end_drop
+    dup
+    constu '9'
+    gt
+    bra .end_drop
+    ; get actual number
+    constu '0'
+    minus
+    pick 1
+    #access $ParseNumber.number
+    constu 10
+    mul
+    plus
+    #set $ParseNumber.number
+
+    ; increase index
+    dup
+    #access $ParseNumber.index
+    constu 1
+    plus
+    #set $ParseNumber.index
+    skip .loop
+.end_drop:
+    drop
+.end:
+}
+
