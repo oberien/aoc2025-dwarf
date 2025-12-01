@@ -39,3 +39,89 @@ be able to run the code.
 ### Notes:
 
 * lldb doesn't work as it requires a running process for `DW_OP_deref` to work
+
+### Intellij Syntax Highlighting
+
+* Ctrl+Alt+S (Settings) -> Editor -> File Types -> Add
+* Name: DWARF Expression
+* Description: DWARF Expression
+* Line Comment: `;`
+* Only at line start: off
+* Block: n/a
+* Hex prefix: 0x
+* Support: everything
+* Keywords 1:
+  ```
+  addr
+  constu
+  consts
+  const_type
+  dup
+  drop
+  pick
+  swap
+  rot
+  deref_size
+  deref
+  abs
+  and
+  div
+  minus
+  mod
+  mul
+  neg
+  not
+  or
+  plus
+  plus_uconst
+  shl
+  xor
+  le
+  ge
+  eq
+  lt
+  gt
+  ne
+  skip
+  bra
+  call
+  convert
+  reinterpret
+  nop
+  ```
+* Keywords 2:
+  ```
+  $u8
+  $i8
+  $u16
+  $i16
+  $u32
+  $i32
+  $u64
+  $i64
+  $generic
+  ```
+* Keywords 3:
+  ```
+  #rodata
+  #type
+  #var
+  #proc
+  #debug
+  #if
+  #else
+  #create
+  #access
+  #set
+  #u8
+  #i8
+  #u16
+  #i16
+  #u32
+  #i32
+  #u64
+  #i64
+  #include_file
+  ```
+* After adding -> File Name Patterns: `*.dwasm`
+
