@@ -33,7 +33,7 @@ pub enum Item<'a> {
 #[derive(Debug, Clone)]
 pub enum Instruction<'a> {
     /// DW_OP_addr
-    Addr(&'a str, i64),
+    Addr(Addr<'a>),
     /// `DW_OP_lit<n>`, `DW_OP_const<n>u`, `DW_OP_constu`
     Constu(U64),
     /// `DW_OP_const<n>s`, `DW_OP_consts`
@@ -154,6 +154,12 @@ pub enum Instruction<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum Addr<'a> {
+    RodataRef(&'a str, i64),
+    Addr(U64),
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum CondOp {
     Lt,
     Le,
@@ -198,7 +204,7 @@ impl Display for Item<'_> {
 impl Display for Instruction<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::Addr(name, addend) => write!(f, "addr {name}+{addend}"),
+            Instruction::Addr(addr) => Display::fmt(addr, f),
             Instruction::Constu(unsigned) => write!(f, "constu {unsigned}"),
             Instruction::Consts(signed) => write!(f, "consts {signed}"),
             Instruction::ConstType(typ, data) => write!(f, "const_type {typ}, {data}"),
@@ -289,6 +295,15 @@ impl Display for Instruction<'_> {
     }
 }
 
+impl Display for Addr<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Addr::RodataRef(name, addend) => write!(f, "{name}+{addend}"),
+            Addr::Addr(addr) => Display::fmt(&addr, f),
+        }
+    }
+}
+
 impl Display for CondOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -328,7 +343,7 @@ fn items<'a>() -> impl Parser<'a, Vec<Item<'a>>> {
     choice((
         just("#rodata")
             .ignore_then(label().padded())
-            .then(define_data().padded().repeated().collect().delimited_by(just('{'), just('}')))
+            .then(define_data().padded().padded_by(comment().repeated()).repeated().collect().delimited_by(just('{'), just('}')))
             .map(|(name, def_data)| Item::Rodata { name, def_data }),
         just("#type").padded()
             .ignore_then(custom_type())
@@ -358,12 +373,14 @@ fn whitespace<'a>() -> impl Parser<'a, ()> + Clone {
 
 fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
     recursive(|instruction| choice((
-        just("addr").ignore_then(whitespace()).ignore_then(label())
-            .then(choice((
-                just('+').padded().ignore_then(u64()).map(|u| u.number as i64),
-                just('-').padded().ignore_then(u64()).map(|u| -(u.number as i64)),
-            )).or_not())
-            .map(|(name, number)| Instruction::Addr(name, number.unwrap_or(0))),
+        just("addr").ignore_then(whitespace())
+            .ignore_then(choice((
+                u64().map(Addr::Addr),
+                label().then(choice((
+                    just('+').padded().ignore_then(u64()).map(|u| u.number as i64),
+                    just('-').padded().ignore_then(u64()).map(|u| -(u.number as i64)),
+                )).or_not()).map(|(name, addend)| Addr::RodataRef(name, addend.unwrap_or(0))),
+            ))).map(Instruction::Addr),
         just("constu").ignore_then(whitespace()).ignore_then(u64()).map(Instruction::Constu),
         just("consts").ignore_then(whitespace()).ignore_then(i64()).map(Instruction::Consts),
         just("const_type").ignore_then(whitespace())
@@ -500,15 +517,15 @@ impl Display for DefineData<'_> {
 impl DefineData<'_> {
     pub fn to_vec(&self) -> Vec<u8> {
         match self {
-            DefineData::U8(u) => u.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
-            DefineData::U16(u) => u.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
-            DefineData::U32(u) => u.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
-            DefineData::U64(u) => u.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
-            DefineData::I8(i) => i.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
-            DefineData::I16(i) => i.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
-            DefineData::I32(i) => i.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
-            DefineData::I64(i) => i.into_iter().flat_map(|u| u.number.to_ne_bytes()).collect(),
-            DefineData::IncludeFile(path) => std::fs::read(&**path).unwrap(),
+            DefineData::U8(u) => u.into_iter().flat_map(|u| u.number.to_le_bytes()).collect(),
+            DefineData::U16(u) => u.into_iter().flat_map(|u| u.number.to_le_bytes()).collect(),
+            DefineData::U32(u) => u.into_iter().flat_map(|u| u.number.to_le_bytes()).collect(),
+            DefineData::U64(u) => u.into_iter().flat_map(|u| u.number.to_le_bytes()).collect(),
+            DefineData::I8(i) => i.into_iter().flat_map(|u| u.number.to_le_bytes()).collect(),
+            DefineData::I16(i) => i.into_iter().flat_map(|u| u.number.to_le_bytes()).collect(),
+            DefineData::I32(i) => i.into_iter().flat_map(|u| u.number.to_le_bytes()).collect(),
+            DefineData::I64(i) => i.into_iter().flat_map(|u| u.number.to_le_bytes()).collect(),
+            DefineData::IncludeFile(path) => std::fs::read(&**path).unwrap_or_else(|e| panic!("error loading rodata from `{path}`: {e}")),
         }
     }
 }
@@ -720,7 +737,7 @@ fn custom_type<'a>() -> impl Parser<'a, CustomType<'a>> + Clone {
     just('$').ignore_then(ident()).to_slice()
         .padded()
         .then(
-            field_def().separated_by(just(',').padded()).allow_trailing().collect()
+            field_def().separated_by(just(',').padded().padded_by(comment().repeated())).allow_trailing().collect()
                 .delimited_by(just('{'), just('}'))
         ).map(|(name, fields)| CustomType { name, fields })
 }

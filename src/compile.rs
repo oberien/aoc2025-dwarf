@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use gimli::DW_OP_drop;
 use gimli::write::{Address, Expression, UnitEntryId};
 use crate::dwarf_program::DwarfProgram;
-use crate::parse::{CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, Primitive, Type, TypeInit, TypeOrGeneric};
+use crate::parse::{Addr, CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, Primitive, Type, TypeInit, TypeOrGeneric};
 
 struct GlobalContext<'a> {
     procedures: HashMap<&'a str, UnitEntryId>,
@@ -122,9 +122,12 @@ fn compile_function<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalConte
 
 fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a>, fn_ctx: &mut FunctionContext, instruction: Instruction<'_>) {
     match instruction {
-        Instruction::Addr(name, addend) => {
+        Instruction::Addr(Addr::Addr(addr)) => {
+            expr.op_addr(Address::Constant(addr.number));
+        },
+        Instruction::Addr(Addr::RodataRef(name, addend)) => {
             let data_index = program.rodata_data_index(name);
-            expr.op_addr(Address::Symbol { symbol: data_index, addend })
+            expr.op_addr(Address::Symbol { symbol: data_index, addend });
         },
         Instruction::Constu(unsigned) => expr.op_constu(unsigned.number),
         Instruction::Consts(signed) => expr.op_consts(signed.number),
