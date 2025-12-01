@@ -72,7 +72,7 @@ fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a
             Item::Rodata { name, def_data } => {
                 let data: Vec<u8> = def_data.iter().flat_map(DefineData::to_vec).collect();
                 let len_name = format!("{name}.len");
-                program.add_rodata_data(len_name.clone(), data.len().to_ne_bytes().to_vec());
+                program.add_rodata_data(len_name.clone(), data.len().to_le_bytes().to_vec());
                 program.add_rodata_data(name.to_owned(), data);
             }
             Item::Type(CustomType { name, fields: _ }) => {

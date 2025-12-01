@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use gimli::{DW_AT_byte_size, DW_AT_encoding, DW_AT_location, DW_AT_name, DieReference, DwAte, Dwarf, EndianSlice, EvaluationResult, Expression, LittleEndian, Location, Piece, Reader, Unit, UnitOffset, UnitRef, Value, ValueType};
+use gimli::{DW_AT_byte_size, DW_AT_encoding, DW_AT_location, DW_AT_name, DieReference, DwAte, Dwarf, EndianSlice, EvaluationResult, Expression, LittleEndian, Location, Piece, Reader, Unit, UnitRef, Value, ValueType};
 use gimli::write::{RelocateWriter, Relocation, RelocationTarget, Sections, Writer};
 use crate::dwarf_program::{DwarfProgram, RodataData};
 use crate::dwarf_program::write::SectionWriter;
@@ -52,12 +52,19 @@ impl DwarfProgram {
             res = match res {
                 Ok(EvaluationResult::Complete) => break,
                 Ok(EvaluationResult::RequiresMemory { address, size, space, base_type }) => {
-                    assert_eq!(size, 8);
-                    assert!(space.is_none());
-                    assert_eq!(base_type, UnitOffset(0));
                     println!("requires memory {address} {size} {space:?} {base_type:?}");
-                    let val = u64::from_le_bytes(rodata.data[address as usize..][..size as usize].try_into().unwrap());
-                    evaluation.resume_with_memory(Value::Generic(val))
+                    assert!(space.is_none());
+                    let data = &rodata.data[address as usize..][..size as usize];
+                    let val = if base_type.0 == 0 {
+                        let mut bytes = [0u8; 8];
+                        bytes[..size as usize].copy_from_slice(data);
+                        Value::Generic(u64::from_le_bytes(bytes))
+                    } else {
+                        let entry = root.entry(base_type).unwrap();
+                        let typ = ValueType::from_entry(&entry).unwrap().unwrap();
+                        Value::parse(typ, EndianSlice::new(data, LittleEndian)).unwrap()
+                    };
+                    evaluation.resume_with_memory(val)
                 },
                 Ok(EvaluationResult::RequiresRegister { .. }) => panic!("register unsupported"),
                 Ok(EvaluationResult::RequiresFrameBase) => panic!("frame base unsupported"),
