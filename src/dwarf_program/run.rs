@@ -97,7 +97,7 @@ impl DwarfProgram {
 
         let res = evaluation.result();
         assert_eq!(res.len(), 1);
-        let Piece { size_in_bits, bit_offset, location } = res[0];
+        let Piece { size_in_bits, bit_offset, location } = res[0].clone();
         assert_eq!(size_in_bits, None);
         assert_eq!(bit_offset, None);
         let Location::Value { value } = location else { panic!("invalid location {location:?}") };

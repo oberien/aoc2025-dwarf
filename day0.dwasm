@@ -41,10 +41,12 @@
 #type $Foo {
     x: $u8,
     y: $u8,
+    z: $u8,
 }
 
 #var test1 {
-    const_type $Foo, #u8 0x01, 0x00
-    const_type $i16, #u16 0x1110
+    const_type $Foo, #u8 0x01, 0x00, 0x00
+    const_type $Foo, #u8 0x10, 0x00, 0x00
+    #debug
     plus
 }

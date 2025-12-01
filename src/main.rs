@@ -75,8 +75,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::Run { die, hex } => {
             let res = program.run(die);
             match hex {
-                true => println!("{res:#x?}"),
-                false => println!("{res:#?}"),
+                true => println!("{res:#x}"),
+                false => println!("{res}"),
             }
         }
     }
