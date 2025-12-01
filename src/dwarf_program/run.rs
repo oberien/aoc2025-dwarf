@@ -83,7 +83,16 @@ impl DwarfProgram {
                 Ok(EvaluationResult::RequiresRelocatedAddress(rel)) => {
                     if rel == 0 {
                         // handle __debug_stack
-                        println!("{:#?}", &evaluation.stack());
+                        // TODO: fix num-bigint Debug impl
+                        println!("[");
+                        for value in evaluation.stack() {
+                            match value {
+                                Value::UnsignedBaseType(value, len) => println!("    {value:#x} ({:}),", len.0),
+                                Value::SignedBaseType(value, len) => println!("    {value:#x} ({:}),", len.0),
+                                _ => println!("    {value:},"),
+                            }
+                        }
+                        println!("]");
                     }
                     evaluation.resume_with_relocated_address(rel)
                 },
