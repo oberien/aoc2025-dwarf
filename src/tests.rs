@@ -401,3 +401,59 @@ fn test_gdb_shra() {
             }}"#), result);
     }
 }
+
+#[test]
+fn test_arrays_u8() {
+    let tests = [
+        // init, code, expected
+        (0, "#get $ArrayU8.data[0]", 0),
+        (42, "#get $ArrayU8.data[2]", 42),
+        (42, "constu 1\n#getindex $ArrayU8.data", 42),
+        (42, "constu 21\n#set $ArrayU8.data[0]\n#get $ArrayU8.data[0]", 21),
+        (42, "constu 21\n#set $ArrayU8.data[1]\n#get $ArrayU8.data[0]", 42),
+        (42, "constu 21\nconstu 2\n#setindex $ArrayU8.data\n#get $ArrayU8.data[2]", 21),
+        (42, "constu 21\nconstu 2\n#setindex $ArrayU8.data\n#get $ArrayU8.data[1]", 42),
+    ];
+    for (init, code, expected) in tests {
+        run(&format!(r#"
+            #type $ArrayU8 {{
+                data: [$u8; 3],
+            }}
+
+            #var test {{
+                #create $ArrayU8 {{
+                    data: [{init}; 3],
+                }}
+                {code}
+            }}
+        "#), Value::Generic(expected));
+    }
+}
+
+#[test]
+fn test_arrays_u16() {
+    let tests = [
+        // init, code, expected
+        (0, "#get $ArrayU16.data[0]", 0),
+        (0x1337, "#get $ArrayU16.data[2]", 0x1337),
+        (0x1337, "constu 1\n#getindex $ArrayU16.data", 0x1337),
+        (0x1337, "constu 0x42\n#set $ArrayU16.data[0]\n#get $ArrayU16.data[0]", 0x42),
+        (0x1337, "constu 0x42\n#set $ArrayU16.data[1]\n#get $ArrayU16.data[0]", 0x1337),
+        (0x1337, "constu 0x42\nconstu 2\n#setindex $ArrayU16.data\n#get $ArrayU16.data[2]", 0x42),
+        (0x1337, "constu 0x42\nconstu 2\n#setindex $ArrayU16.data\n#get $ArrayU16.data[1]", 0x1337),
+    ];
+    for (init, code, expected) in tests {
+        run(&format!(r#"
+            #type $ArrayU16 {{
+                data: [$u16; 3],
+            }}
+
+            #var test {{
+                #create $ArrayU16 {{
+                    data: [{init}; 3],
+                }}
+                {code}
+            }}
+        "#), Value::Generic(expected));
+    }
+}
