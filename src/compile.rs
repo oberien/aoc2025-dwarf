@@ -1,8 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 use gimli::DW_OP_drop;
 use gimli::write::{Address, Expression, UnitEntryId};
+use itertools::Itertools;
 use crate::dwarf_program::DwarfProgram;
-use crate::parse::{Addr, CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, Primitive, Type, TypeInit, TypeOrGeneric};
+use crate::parse::{Addr, CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, Path, Primitive, Type, TypeInit, TypeOrGeneric, U64};
 
 struct GlobalContext<'a> {
     procedures: HashMap<&'a str, UnitEntryId>,
@@ -77,7 +78,7 @@ fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a
             }
             Item::Type(CustomType { name, fields: _ }) => {
                 let size = type_size(Type::Custom(name), global_ctx);
-                assert!(size <= 256, "type {name} larger than 256 bytes");
+                assert!(size <= 255, "type {name} is larger than 255 bytes");
                 let type_die = global_ctx.type_dies[&Type::Custom(name)];
                 program.set_base_type_size(type_die, size as u8);
             }
@@ -231,7 +232,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             let data = Vec::from(vec).into_boxed_slice();
             expr.op_const_type(type_die, data);
         }
-        Instruction::Set(typ, path) => {
+        Instruction::Set(Path { typ, path }) => {
             let (offset, primitive) = field_offset(typ, &path, global_ctx);
             let primitive_size = primitive_size(primitive);
             let type_size = type_size(Type::Custom(typ), global_ctx);
@@ -254,7 +255,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             // write field by ORing struct and value
             expr.op(gimli::DW_OP_or);
         }
-        Instruction::Access(typ, path) => {
+        Instruction::Access(Path { typ, path }) => {
             let (offset, primitive) = field_offset(typ, &path, global_ctx);
             let primitive_size = primitive_size(primitive);
             let type_size = type_size(Type::Custom(typ), global_ctx);
@@ -286,6 +287,14 @@ fn int_to_type_array(val: u64, type_size: usize) -> Box<[u8]> {
 
 }
 
+fn init_primitive(primitive: Primitive, value: U64, vec: &mut VecDeque<u8>) {
+    let size = primitive_size(primitive);
+    let value = primitive_try_from_u64(primitive, value.number)
+        .unwrap_or_else(|| panic!("{value} doesn't fit into {primitive}"));
+    for byte in value.to_le_bytes()[..size].iter().copied().rev() {
+        vec.push_front(byte);
+    }
+}
 fn init_custom_type(init: CustomTypeInit, vec: &mut VecDeque<u8>, global_ctx: &GlobalContext<'_>) {
     let typ = &global_ctx.custom_types[&init.name];
     assert_eq!(
@@ -301,11 +310,15 @@ fn init_custom_type(init: CustomTypeInit, vec: &mut VecDeque<u8>, global_ctx: &G
         );
         match (extyp, value) {
             (Type::Primitive(primitive), TypeInit::Primitive(value)) => {
-                let size = primitive_size(primitive);
-                let value = primitive_try_from_u64(primitive, value.number)
-                    .unwrap_or_else(|| panic!("{value} doesn't fit into {primitive}"));
-                for byte in value.to_le_bytes()[..size].iter().copied().rev() {
-                    vec.push_front(byte);
+                init_primitive(primitive, value, vec);
+            }
+            (Type::Array(primitive, len1), TypeInit::Array(value, len2)) => {
+                assert_eq!(
+                    len1, len2,
+                    "invalid array initializer: expected length {len1}, found length {len2}",
+                );
+                for _ in 0..len1 {
+                    init_primitive(primitive, value, vec);
                 }
             }
             (Type::Custom(name), TypeInit::Custom(init)) => {
@@ -315,8 +328,13 @@ fn init_custom_type(init: CustomTypeInit, vec: &mut VecDeque<u8>, global_ctx: &G
                 );
                 init_custom_type(init, vec, global_ctx);
             }
-            (ex @ Type::Primitive(_), found @ TypeInit::Custom(_))
-            | (ex @ Type::Custom(_), found @ TypeInit::Primitive(_)) => {
+            (ex @ Type::Primitive(_), found @ TypeInit::Array(_, _))
+            | (ex @ Type::Primitive(_), found @ TypeInit::Custom(_))
+            | (ex @ Type::Custom(_), found @ TypeInit::Primitive(_))
+            | (ex @ Type::Custom(_), found @ TypeInit::Array(_, _))
+            | (ex @ Type::Array(_, _), found @ TypeInit::Primitive(_))
+            | (ex @ Type::Array(_, _), found @ TypeInit::Custom(_))
+            => {
                 panic!("invalid type in create: expected {ex}, found {found}");
             }
         }
@@ -366,6 +384,7 @@ fn primitive_size(primitive: Primitive) -> usize {
 fn type_size_internal<'a>(typ: Type<'a>, global_ctx: &GlobalContext<'a>, visited_types: &mut Vec<&'a str>) -> usize {
     match typ {
         Type::Primitive(primitive) => primitive_size(primitive),
+        Type::Array(primitive, len) => primitive_size(primitive) * len,
         Type::Custom(name) => {
             if visited_types.contains(&name) {
                 panic!("recursive type {name} found in {}", visited_types.join(" -> "));
@@ -379,30 +398,38 @@ fn type_size_internal<'a>(typ: Type<'a>, global_ctx: &GlobalContext<'a>, visited
         }
     }
 }
-fn field_offset(typ: &str, path: &[&str], global_ctx: &GlobalContext<'_>) -> (u8, Primitive) {
-    field_offset_internal(Type::Custom(typ), path, global_ctx)
+fn field_offset(typ: &str, path: &[(&str, Option<usize>)], global_ctx: &GlobalContext<'_>) -> (u8, Primitive) {
+    field_offset_internal(Type::Custom(typ), None, path, global_ctx)
 }
-fn field_offset_internal(typ: Type<'_>, path: &[&str], global_ctx: &GlobalContext<'_>) -> (u8, Primitive) {
+fn field_offset_internal(typ: Type<'_>, index: Option<usize>, path: &[(&str, Option<usize>)], global_ctx: &GlobalContext<'_>) -> (u8, Primitive) {
     let type_name = match typ {
         Type::Custom(name) => name,
+        Type::Array(primitive, len) => {
+            assert!(path.is_empty(), "field access reached array `{typ}`, but field accesses are left: .{}", path.iter().map(|(field, _)| field).join("."));
+            assert!(index.is_some(), "tried to access an array-field without index: {typ:?}");
+            let index = index.unwrap();
+            assert!(index < len, "index `{index}` out of bounds len `{len}`");
+            let primitive_size = primitive_size(primitive);
+            return ((primitive_size * index).try_into().unwrap(), primitive);
+        }
         Type::Primitive(primitive) => {
-            assert!(path.is_empty(), "field access reached primitive, but field accesses are left: .{}", path.join("."));
+            assert!(path.is_empty(), "field access reached primitive, but field accesses are left: .{}", path.iter().map(|(field, _)| field).join("."));
             return (0, primitive)
         }
     };
     let typ = global_ctx.custom_types.get(type_name)
         .unwrap_or_else(|| panic!("unknown type {type_name}"));
-    if path.is_empty() {
-        panic!("field access path must end with a primitive, but instead ended with non-primitive {type_name}");
-    }
+    assert!(!path.is_empty(), "field access path must end with a primitive, but instead ended with non-primitive {type_name}");
+    assert!(index.is_none(), "field access path has an index for non-array {type_name}, index {}", index.unwrap());
 
     let mut offset = 0u8;
+    let (field_name, index) = path[0];
     for &(name, typ) in &typ.fields {
-        if name == path[0] {
-            let (o, primitive) = field_offset_internal(typ, &path[1..], global_ctx);
+        if name == field_name {
+            let (o, primitive) = field_offset_internal(typ, index, &path[1..], global_ctx);
             return (offset.checked_add(o).unwrap(), primitive);
         }
         offset = offset.checked_add(type_size(typ, global_ctx).try_into().unwrap()).unwrap();
     }
-    panic!("field {} not found in type {type_name}", path[0])
+    panic!("field {} not found in type {type_name}", path[0].0)
 }

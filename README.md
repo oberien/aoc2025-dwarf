@@ -12,7 +12,7 @@ support DWARF expressions for address/value-calculation.
 DWARF expressions are a stack machine with 166 instructions.
 It's possible to read the top 256 stack elements.
 It's only possible modify the top 3 stack elements.
-A stack element can have up to 256 bytes (however not all implementations
+A stack element can have up to 255 bytes (however not all implementations
 allow this).
 
 Gdb <=16.3 has a bug in their DWARF expression evaluator, which is fixed in
@@ -45,7 +45,7 @@ be able to run the code.
 * Ctrl+Alt+S (Settings) -> Editor -> File Types -> Add
 * Name: DWARF Expression
 * Description: DWARF Expression
-* Line Comment: `;`
+* Line Comment: `//`
 * Only at line start: off
 * Block: n/a
 * Hex prefix: 0x

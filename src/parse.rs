@@ -147,10 +147,10 @@ pub enum Instruction<'a> {
     IfElse(Vec<(Vec<Instruction<'a>>, CondOp, Vec<Instruction<'a>>, Vec<Instruction<'a>>)>, Vec<Instruction<'a>>),
     /// Create and push a new instance of a custom type
     Create(CustomTypeInit<'a>),
-    /// Access a (possibly nested) field of a type; type, field-path
-    Access(&'a str, Vec<&'a str>),
-    /// Set a (possibly nested) field of a type to the value on top of the stack (popping it); type, field-path
-    Set(&'a str, Vec<&'a str>),
+    /// Pop a type from the stack and push the value of a (possibly nested) field
+    Access(Path<'a>),
+    /// Pop a value from the stack and set it as (possibly nested) field of the now-topmost type
+    Set(Path<'a>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -167,6 +167,15 @@ pub enum CondOp {
     Ge,
     Gt,
     Ne,
+}
+
+/// A possibly nested field of a type
+///
+/// `$Foo.bar[0].baz` becomes `Path { typ: "$Foo", path: vec![("bar", Some(0), ("baz", None)] }`.
+#[derive(Debug, Clone)]
+pub struct Path<'a> {
+    pub typ: &'a str,
+    pub path: Vec<(&'a str, Option<usize>)>,
 }
 
 impl Display for Item<'_> {
@@ -277,17 +286,23 @@ impl Display for Instruction<'_> {
                 Ok(())
             },
             Instruction::Create(custom_type_init) => Display::fmt(custom_type_init, f),
-            Instruction::Access(typ, path) => {
+            Instruction::Access(Path { typ, path }) => {
                 write!(f, "#access {typ}")?;
-                for part in path {
-                    write!(f, ".{part}")?;
+                for (field, index) in path {
+                    write!(f, ".{field}")?;
+                    if let Some(index) = index {
+                        write!(f, "[{index}]")?;
+                    }
                 }
                 Ok(())
             }
-            Instruction::Set(typ, path) => {
+            Instruction::Set(Path { typ, path }) => {
                 write!(f, "#set {typ}")?;
-                for part in path {
-                    write!(f, ".{part}")?;
+                for (field, index) in path {
+                    write!(f, ".{field}")?;
+                    if let Some(index) = index {
+                        write!(f, "[{index}]")?;
+                    }
                 }
                 Ok(())
             }
@@ -457,16 +472,23 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
             .ignore_then(custom_type_init())
             .map(Instruction::Create),
         just("#access").padded()
-            .ignore_then(just('$').then(ident()).to_slice())
-            .then_ignore(just('.'))
-            .then(ident().separated_by(just('.')).at_least(1).collect())
-            .map(|(typ, path)| Instruction::Access(typ, path)),
+            .ignore_then(path())
+            .map(Instruction::Access),
         just("#set").padded()
-            .ignore_then(just('$').then(ident()).to_slice())
-            .then_ignore(just('.'))
-            .then(ident().separated_by(just('.')).at_least(1).collect())
-            .map(|(typ, path)| Instruction::Set(typ, path)),
+            .ignore_then(path())
+            .map(Instruction::Set),
     ))))
+}
+
+fn path<'a>() -> impl Parser<'a, Path<'a>> + Clone {
+    just('$').then(ident()).to_slice()
+        .then_ignore(just('.'))
+        .then(
+            ident().then(
+                just('[').padded().ignore_then(u64().padded()).then_ignore(just(']').padded()).or_not()
+                    .map(|num| num.map(|num| usize::try_from(num.number).unwrap()))
+            ).separated_by(just('.')).at_least(1).collect()
+        ).map(|(typ, path)| Path { typ, path })
 }
 
 fn cond_op<'a>() -> impl Parser<'a, CondOp> + Clone {
@@ -681,6 +703,8 @@ pub enum TypeOrGeneric<'a> {
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum Type<'a> {
     Primitive(Primitive),
+    /// Element-Type, number-of-elements
+    Array(Primitive, usize),
     Custom(&'a str),
 }
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
@@ -713,6 +737,7 @@ impl Display for Type<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Primitive(primitive) => Display::fmt(primitive, f),
+            Type::Array(primitive, len) => write!(f, "[{primitive}; {len}]"),
             Type::Custom(custom) => Display::fmt(custom, f),
         }
     }
@@ -744,6 +769,28 @@ impl Display for CustomType<'_> {
     }
 }
 
+fn primitive_type<'a>() -> impl Parser<'a, Primitive> + Clone {
+    choice((
+        just("$u8").to(Primitive::U8),
+        just("$u16").to(Primitive::U16),
+        just("$u32").to(Primitive::U32),
+        just("$u64").to(Primitive::U64),
+        just("$i8").to(Primitive::I8),
+        just("$i16").to(Primitive::I16),
+        just("$i32").to(Primitive::I32),
+        just("$i64").to(Primitive::I64),
+        just("$f32").to(Primitive::F32),
+        just("$f64").to(Primitive::F64),
+    ))
+}
+fn array_type<'a>() -> impl Parser<'a, (Primitive, usize)> + Clone {
+    just('[').padded()
+        .ignore_then(primitive_type().padded())
+        .then_ignore(just(';').padded())
+        .then(u64().padded())
+        .then_ignore(just(']').padded())
+        .map(|(primitive, len)| (primitive, len.number.try_into().unwrap()))
+}
 fn custom_type<'a>() -> impl Parser<'a, CustomType<'a>> + Clone {
     just('$').ignore_then(ident()).to_slice()
         .padded()
@@ -765,16 +812,8 @@ fn typ_or_generic<'a>() -> impl Parser<'a, TypeOrGeneric<'a>> + Clone {
 }
 fn typ<'a>() -> impl Parser<'a, Type<'a>> + Clone {
     choice((
-        just("$u8").to(Type::Primitive(Primitive::U8)),
-        just("$u16").to(Type::Primitive(Primitive::U16)),
-        just("$u32").to(Type::Primitive(Primitive::U32)),
-        just("$u64").to(Type::Primitive(Primitive::U64)),
-        just("$i8").to(Type::Primitive(Primitive::I8)),
-        just("$i16").to(Type::Primitive(Primitive::I16)),
-        just("$i32").to(Type::Primitive(Primitive::I32)),
-        just("$i64").to(Type::Primitive(Primitive::I64)),
-        just("$f32").to(Type::Primitive(Primitive::F32)),
-        just("$f64").to(Type::Primitive(Primitive::F64)),
+        primitive_type().map(Type::Primitive),
+        array_type().map(|(primitive, len)| Type::Array(primitive, len)),
         just('$').ignore_then(ident()).to_slice().map(Type::Custom),
     ))
 }
@@ -783,6 +822,8 @@ fn typ<'a>() -> impl Parser<'a, Type<'a>> + Clone {
 #[derive(Debug, Clone)]
 pub enum TypeInit<'a> {
     Primitive(U64),
+    /// element, len
+    Array(U64, usize),
     Custom(CustomTypeInit<'a>),
 }
 #[derive(Debug, Clone)]
@@ -794,6 +835,7 @@ impl Display for TypeInit<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TypeInit::Primitive(primitive) => Display::fmt(primitive, f),
+            TypeInit::Array(value, len) => write!(f, "[{value}; {len}]"),
             TypeInit::Custom(custom) => Display::fmt(custom, f),
         }
     }
@@ -811,8 +853,15 @@ impl Display for CustomTypeInit<'_> {
 
 fn custom_type_init<'a>() -> impl Parser<'a, CustomTypeInit<'a>> + Clone {
     recursive(|custom_type_init| {
+        let array_init = just('[').padded()
+            .ignore_then(u64().padded())
+            .then_ignore(just(';').padded())
+            .then(u64().padded())
+            .then_ignore(just(']').padded())
+            .map(|(element, len)| TypeInit::Array(element, len.number.try_into().unwrap()));
         let typ_init = choice((
             u64().map(TypeInit::Primitive),
+            array_init,
             custom_type_init.map(TypeInit::Custom),
         ));
         let field_init = ident().padded()
