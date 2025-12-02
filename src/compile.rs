@@ -255,7 +255,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             // write field by ORing struct and value
             expr.op(gimli::DW_OP_or);
         }
-        Instruction::Access(Path { typ, path }) => {
+        Instruction::Get(Path { typ, path }) => {
             let (offset, primitive) = field_offset(typ, &path, global_ctx);
             let primitive_size = primitive_size(primitive);
             let type_size = type_size(Type::Custom(typ), global_ctx);

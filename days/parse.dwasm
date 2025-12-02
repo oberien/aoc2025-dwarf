@@ -11,9 +11,9 @@
 .loop:
     // get input byte
     dup
-    #access $ParseNumber.address
+    #get $ParseNumber.address
     pick 1
-    #access $ParseNumber.index
+    #get $ParseNumber.index
     plus
     deref_size 1
     // check if it is a digit
@@ -29,7 +29,7 @@
     constu '0'
     minus
     pick 1
-    #access $ParseNumber.number
+    #get $ParseNumber.number
     constu 10
     mul
     plus
@@ -37,7 +37,7 @@
 
     // increase index
     dup
-    #access $ParseNumber.index
+    #get $ParseNumber.index
     constu 1
     plus
     #set $ParseNumber.index

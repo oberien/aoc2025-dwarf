@@ -111,7 +111,7 @@ be able to run the code.
   #if
   #else
   #create
-  #access
+  #get
   #set
   #u8
   #i8

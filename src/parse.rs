@@ -148,7 +148,7 @@ pub enum Instruction<'a> {
     /// Create and push a new instance of a custom type
     Create(CustomTypeInit<'a>),
     /// Pop a type from the stack and push the value of a (possibly nested) field
-    Access(Path<'a>),
+    Get(Path<'a>),
     /// Pop a value from the stack and set it as (possibly nested) field of the now-topmost type
     Set(Path<'a>),
 }
@@ -286,8 +286,8 @@ impl Display for Instruction<'_> {
                 Ok(())
             },
             Instruction::Create(custom_type_init) => Display::fmt(custom_type_init, f),
-            Instruction::Access(Path { typ, path }) => {
-                write!(f, "#access {typ}")?;
+            Instruction::Get(Path { typ, path }) => {
+                write!(f, "#get {typ}")?;
                 for (field, index) in path {
                     write!(f, ".{field}")?;
                     if let Some(index) = index {
@@ -471,9 +471,9 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
         just("#create").padded()
             .ignore_then(custom_type_init())
             .map(Instruction::Create),
-        just("#access").padded()
+        just("#get").padded()
             .ignore_then(path())
-            .map(Instruction::Access),
+            .map(Instruction::Get),
         just("#set").padded()
             .ignore_then(path())
             .map(Instruction::Set),

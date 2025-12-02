@@ -19,6 +19,6 @@
     constu 0x42
     #set $String.data[242]
     dup
-    #access $String.data[3]
+    #get $String.data[3]
     #debug
 }

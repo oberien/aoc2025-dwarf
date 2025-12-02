@@ -144,12 +144,12 @@ fn test_struct() {
                 },
             }
             dup
-            #access $Foo.foo
+            #get $Foo.foo
             pick 1
-            #access $Foo.bar.baz
+            #get $Foo.bar.baz
             plus
             #set $Foo.foo
-            #access $Foo.foo
+            #get $Foo.foo
         }
     "#, Value::Generic(0x1142))
 }
