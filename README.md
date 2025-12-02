@@ -112,7 +112,9 @@ be able to run the code.
   #else
   #create
   #get
+  #getindex
   #set
+  #setindex
   #u8
   #i8
   #u16

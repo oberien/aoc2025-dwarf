@@ -151,6 +151,10 @@ pub enum Instruction<'a> {
     Get(Path<'a>),
     /// Pop a value from the stack and set it as (possibly nested) field of the now-topmost type
     Set(Path<'a>),
+    /// Pop an index and a type from the stack and push the value of the (possibly nested) array-element at the given index
+    GetIndex(Path<'a>),
+    /// Pop an index and a value from the stack and set the value as the (possibly nested) array-element at the given index of the now-topmost type
+    SetIndex(Path<'a>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -286,26 +290,10 @@ impl Display for Instruction<'_> {
                 Ok(())
             },
             Instruction::Create(custom_type_init) => Display::fmt(custom_type_init, f),
-            Instruction::Get(Path { typ, path }) => {
-                write!(f, "#get {typ}")?;
-                for (field, index) in path {
-                    write!(f, ".{field}")?;
-                    if let Some(index) = index {
-                        write!(f, "[{index}]")?;
-                    }
-                }
-                Ok(())
-            }
-            Instruction::Set(Path { typ, path }) => {
-                write!(f, "#set {typ}")?;
-                for (field, index) in path {
-                    write!(f, ".{field}")?;
-                    if let Some(index) = index {
-                        write!(f, "[{index}]")?;
-                    }
-                }
-                Ok(())
-            }
+            Instruction::Get(path) => write!(f, "#get {path}"),
+            Instruction::Set(path) => write!(f, "#set {path}"),
+            Instruction::GetIndex(path) => write!(f, "#getindex {path}"),
+            Instruction::SetIndex(path) => write!(f, "#setindex {path}"),
         }
     }
 }
@@ -329,6 +317,19 @@ impl Display for CondOp {
             CondOp::Gt => write!(f, ">"),
             CondOp::Ne => write!(f, "!="),
         }
+    }
+}
+impl Display for Path<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Path { typ, path } = self;
+        write!(f, "{typ}")?;
+        for (field, index) in path {
+            write!(f, ".{field}")?;
+            if let Some(index) = index {
+                write!(f, "[{index}]")?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -471,6 +472,12 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
         just("#create").padded()
             .ignore_then(custom_type_init())
             .map(Instruction::Create),
+        just("#getindex").padded()
+            .ignore_then(path())
+            .map(Instruction::GetIndex),
+        just("#setindex").padded()
+            .ignore_then(path())
+            .map(Instruction::SetIndex),
         just("#get").padded()
             .ignore_then(path())
             .map(Instruction::Get),

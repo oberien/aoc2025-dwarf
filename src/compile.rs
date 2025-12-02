@@ -1,5 +1,4 @@
 use std::collections::{HashMap, VecDeque};
-use gimli::DW_OP_drop;
 use gimli::write::{Address, Expression, UnitEntryId};
 use itertools::Itertools;
 use crate::dwarf_program::DwarfProgram;
@@ -186,7 +185,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
         Instruction::Debug => {
             let data_index = program.rodata_data_index("__debug_stack");
             expr.op_addr(Address::Symbol { symbol: data_index, addend: 0 });
-            expr.op(DW_OP_drop);
+            expr.op(gimli::DW_OP_drop);
         },
         Instruction::IfElse(ifs, els) => {
             let end_label = global_ctx.anonymous_label();
@@ -261,11 +260,73 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             let type_size = type_size(Type::Custom(typ), global_ctx);
             let left_offset = type_size as u8 - primitive_size as u8 - offset;
             let type_die = global_ctx.type_dies[&Type::Custom(typ)];
-            expr.op_const_type(type_die, int_to_type_array(left_offset as u64 * 8, type_size));
+            expr.op_constu(left_offset as u64 * 8);
+            expr.op_convert(Some(type_die));
             expr.op(gimli::DW_OP_shr);
-            expr.op_const_type(type_die, int_to_type_array(primitive_mask(primitive), type_size));
-            expr.op(gimli::DW_OP_and);
             expr.op_convert(None);
+            expr.op_constu(primitive_mask(primitive));
+            expr.op(gimli::DW_OP_and);
+        }
+        Instruction::SetIndex(path) => {
+            assert!(path.path.last().unwrap().1.is_none(), "#setindex's last field must not have an index: {path}");
+            let Path { typ, mut path } = path;
+            path.last_mut().unwrap().1 = Some(0);
+            let (offset, primitive) = field_offset(typ, &path, global_ctx);
+            let primitive_size = primitive_size(primitive);
+            let type_size = type_size(Type::Custom(typ), global_ctx);
+            let type_die = global_ctx.type_dies[&Type::Custom(typ)];
+            let left_offset = type_size - primitive_size - offset as usize;
+            // -> type, value, element-index
+            expr.op_constu(primitive_size as u64 * 8);
+            expr.op(gimli::DW_OP_mul); // -> type, value, (bit-)index
+            // -> type, value, index
+            // mask value
+            expr.op(gimli::DW_OP_swap); // -> type, index, value
+            expr.op_constu(primitive_mask(primitive));
+            expr.op(gimli::DW_OP_and); // -> type, index, value
+            // convert value to our type
+            expr.op_convert(Some(type_die));
+            expr.op(gimli::DW_OP_swap); // -> type, value, index
+            // shift into correct position, subtracting the converted index
+            expr.op_constu(left_offset as u64 * 8); // -> type, value, index, offset
+            expr.op(gimli::DW_OP_swap); // -> type, value, offset, index
+            expr.op(gimli::DW_OP_minus); // -> type, index, value, offsetindex
+            expr.op_convert(Some(type_die));
+            expr.op(gimli::DW_OP_dup); // -> type, value, offsetindex, offsetindex
+            expr.op(gimli::DW_OP_rot); // -> type, offsetindex, value, offsetindex
+            expr.op(gimli::DW_OP_shl); // -> type, offsetindex, offsetvalue
+            // zero-out our "struct" by ANDing a mask
+            expr.op(gimli::DW_OP_rot); // -> offsetvalue, type, offsetindex
+            let mut mask = vec![0x00u8; type_size];
+            mask[..primitive_size].fill(0xff);
+            expr.op_const_type(type_die, mask.into_boxed_slice()); // -> offsetvalue, type, offsetindex, not_mask
+            expr.op(gimli::DW_OP_not); // -> offsetvalue, type, offsetindex, mask
+            expr.op(gimli::DW_OP_swap); // -> offsetvalue, type, mask, offsetindex
+            expr.op(gimli::DW_OP_shl); // -> offsetvalue, type, offsetmask
+            expr.op(gimli::DW_OP_and); // -> offsetvalue, masked_type
+            // write field by ORing struct and value
+            expr.op(gimli::DW_OP_or);
+        }
+        Instruction::GetIndex(path) => {
+            assert!(path.path.last().unwrap().1.is_none(), "#getindex's last field must not have an index: {path}");
+            let Path { typ, mut path } = path;
+            path.last_mut().unwrap().1 = Some(0);
+            let (offset, primitive) = field_offset(typ, &path, global_ctx);
+            let primitive_size = primitive_size(primitive);
+            let type_size = type_size(Type::Custom(typ), global_ctx);
+            let left_offset = type_size as u8 - primitive_size as u8 - offset;
+            let type_die = global_ctx.type_dies[&Type::Custom(typ)];
+            // -> type, element-index
+            expr.op_constu(primitive_size as u64 * 8);
+            expr.op(gimli::DW_OP_mul); // -> type, (bit-)index
+            expr.op_constu(left_offset as u64 * 8); // -> type, index, offset
+            expr.op(gimli::DW_OP_swap); // -> type, offset, index
+            expr.op(gimli::DW_OP_minus); // -> type, offsetindex
+            expr.op_convert(Some(type_die));
+            expr.op(gimli::DW_OP_shr);
+            expr.op_convert(None);
+            expr.op_constu(primitive_mask(primitive));
+            expr.op(gimli::DW_OP_and);
         }
     }
 }
