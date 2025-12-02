@@ -2,10 +2,10 @@
     #include_file "days/inputs/day00"
 }
 
-; count number of 'X' in the input
+// count number of 'X' in the input
 #var day0 {
-    constu 0 ; count
-    constu 0 ; index
+    constu 0 // count
+    constu 0 // index
 
 .loop:
     dup

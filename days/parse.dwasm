@@ -3,20 +3,20 @@
     index: $u64,
     address: $u64,
 }
-; Stack before:
-;   $ParseNumber
-; Stack after:
-;   $ParseNumber
+// Stack before:
+//   $ParseNumber
+// Stack after:
+//   $ParseNumber
 #proc parse_number_dec {
 .loop:
-    ; get input byte
+    // get input byte
     dup
     #access $ParseNumber.address
     pick 1
     #access $ParseNumber.index
     plus
     deref_size 1
-    ; check if it is a digit
+    // check if it is a digit
     dup
     constu '0'
     lt
@@ -25,7 +25,7 @@
     constu '9'
     gt
     bra .end_drop
-    ; get actual number
+    // get actual number
     constu '0'
     minus
     pick 1
@@ -35,7 +35,7 @@
     plus
     #set $ParseNumber.number
 
-    ; increase index
+    // increase index
     dup
     #access $ParseNumber.index
     constu 1

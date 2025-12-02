@@ -364,7 +364,7 @@ fn instructions<'a>(instruction: impl Parser<'a, Instruction<'a>> + Clone) -> im
 }
 
 fn comment<'a>() -> impl Parser<'a, ()> + Clone {
-    just(';').then(any().and_is(newline().not()).repeated()).then(newline()).ignored()
+    just("//").then(any().and_is(newline().not()).repeated()).then(newline()).ignored()
 }
 
 fn whitespace<'a>() -> impl Parser<'a, ()> + Clone {
