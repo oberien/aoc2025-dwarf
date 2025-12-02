@@ -3,57 +3,15 @@
     data: [$u8; 254],
 }
 
-#var test_string {
+// Stack before:
+//   number
+// Stack after:
+//   $String
+#proc string_from_number {
     #create $String {
         len: 0,
         data: [0; 254],
     }
-    constu 0x31
-    #set $String.data[0]
-    constu 0x33
-    #set $String.data[1]
-    constu 0x34
-    constu 2
-    #debug
-    #setindex $String.data
-    #debug
-    constu 0x42
-    constu 242
-    #debug
-    #setindex $String.data
-    #debug
-//    constu 0x37
-//    #set $String.data[3]
-    constu 0x41
-    #set $String.data[242]
-    #debug
-}
+    swap
 
-#type $String2 {
-    data: [$u64; 5],
-}
-
-#var test_string2 {
-    #create $String2 {
-        data: [0; 5],
-    }
-    constu 0x1122334455667788
-    #set $String2.data[0]
-    constu 0x3333333333333333
-    constu 1
-    #setindex $String2.data
-    #debug
-    constu 0x34
-    constu 2
-    #debug
-    #setindex $String2.data
-    #debug
-    dup
-    constu 0
-    #debug
-    #getindex $String2.data
-    #debug
-    pick 1
-    #get $String2.data[1]
-    #debug
 }

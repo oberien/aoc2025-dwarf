@@ -145,6 +145,8 @@ pub enum Instruction<'a> {
     Debug,
     /// Condition-Lhs, Condition-Op, Condition-Rhs, Then, Else
     IfElse(Vec<(Vec<Instruction<'a>>, CondOp, Vec<Instruction<'a>>, Vec<Instruction<'a>>)>, Vec<Instruction<'a>>),
+    /// Condition-Lhs, Condition-Op, Condition-Rhs, Body
+    While(Vec<Instruction<'a>>, CondOp, Vec<Instruction<'a>>, Vec<Instruction<'a>>),
     /// Create and push a new instance of a custom type
     Create(CustomTypeInit<'a>),
     /// Pop a type from the stack and push the value of a (possibly nested) field
@@ -289,6 +291,22 @@ impl Display for Instruction<'_> {
                 }
                 Ok(())
             },
+            Instruction::While(lhs, op, rhs, body) => {
+                write!(f, "#while (")?;
+                for lhs in lhs {
+                    write!(f, "{lhs}, ")?;
+                }
+                write!(f, ") {op} (")?;
+                for rhs in rhs {
+                    write!(f, "{rhs}, ")?;
+                }
+                writeln!(f, ") {{")?;
+                let mut indented = IndentWriter::new("    ", &mut *f);
+                for inst in body {
+                    writeln!(indented, "{inst}")?;
+                }
+                write!(f, "}}")
+            }
             Instruction::Create(custom_type_init) => Display::fmt(custom_type_init, f),
             Instruction::Get(path) => write!(f, "#get {path}"),
             Instruction::Set(path) => write!(f, "#set {path}"),
@@ -469,6 +487,19 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
                     .or_not()
                     .map(Option::unwrap_or_default)
             ).map(|(ifs, els)| Instruction::IfElse(ifs, els)),
+        just("#while").padded().padded_by(comment().repeated())
+            .ignore_then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))
+            .padded().padded_by(comment().repeated())
+            .then(cond_op().padded())
+            .padded().padded_by(comment().repeated())
+            .then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))
+            .padded().padded_by(comment().repeated())
+            .then_ignore(just('{').padded())
+            .padded().padded_by(comment().repeated())
+            .then(instructions(instruction.clone()))
+            .padded().padded_by(comment().repeated())
+            .then_ignore(just('}').padded())
+            .map(|(((lhs, cond_op), rhs), body)| Instruction::While(lhs, cond_op, rhs, body)),
         just("#create").padded()
             .ignore_then(custom_type_init())
             .map(Instruction::Create),

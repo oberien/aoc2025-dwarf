@@ -457,3 +457,23 @@ fn test_arrays_u16() {
         "#), Value::Generic(expected));
     }
 }
+
+#[test]
+fn test_while() {
+    run(r#"
+        #var test {
+            constu 0
+            constu 0
+            // -> sum, i
+            #while (dup) < (constu 10) {
+                dup // -> sum, i, i
+                rot // -> i, sum, i
+                plus // -> i, sum
+                swap // -> sum, i
+                constu 1 // -> sum, i, 1
+                plus // -> sum, i
+            }
+            drop // sum
+        }
+    "#, Value::Generic(45));
+}

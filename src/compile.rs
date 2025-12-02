@@ -224,6 +224,36 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             }
             compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&end_label));
         }
+        Instruction::While(lhs, op, rhs, body) => {
+            let loop_label = global_ctx.anonymous_label();
+            let end_label = global_ctx.anonymous_label();
+            // a < b needs to be translated as
+            // compile(a)
+            // compile(b)
+            // ge ; OPPOSITE CONDITION
+            // bra .end
+            compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&loop_label));
+            for lhs in lhs {
+                compile_instruction(expr, program, global_ctx, fn_ctx, lhs);
+            }
+            for rhs in rhs {
+                compile_instruction(expr, program, global_ctx, fn_ctx, rhs);
+            }
+            match op {
+                CondOp::Lt => expr.op(gimli::DW_OP_ge),
+                CondOp::Le => expr.op(gimli::DW_OP_gt),
+                CondOp::Eq => expr.op(gimli::DW_OP_ne),
+                CondOp::Ge => expr.op(gimli::DW_OP_lt),
+                CondOp::Gt => expr.op(gimli::DW_OP_le),
+                CondOp::Ne => expr.op(gimli::DW_OP_eq),
+            }
+            compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Bra(&end_label));
+            for inst in body {
+                compile_instruction(expr, program, global_ctx, fn_ctx, inst);
+            }
+            compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Skip(&loop_label));
+            compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&end_label));
+        }
         Instruction::Create(custom_type_init) => {
             let type_die = global_ctx.type_dies[&Type::Custom(custom_type_init.name)];
             let mut vec = VecDeque::new();

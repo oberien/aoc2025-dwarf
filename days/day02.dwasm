@@ -1,0 +1,57 @@
+#rodata day2_sample {
+    #include_file "days/inputs/day02_sample"
+}
+#rodata day2_input {
+    #include_file "days/inputs/day02_input"
+}
+
+#type $Day2 {
+    len: $u64,
+    address: $u64,
+    index: $u64,
+    range_from: $u64,
+    range_to: $u64,
+    current_number: $u64,
+    sum: $u64,
+}
+
+#var day2_part1_sample {
+    addr day2_sample
+    addr day2_sample.len
+    deref
+    call day2
+    #get $Day2.sum
+}
+#var day2_part1 {
+    addr day2_input
+    addr day2_input.len
+    deref
+    call day2
+    #get $Day2.sum
+}
+#var day2_part2_sample {
+    addr day2_sample
+    addr day2_sample.len
+    deref
+    call day2
+    #get $Day2.sum
+}
+#var day2_part2 {
+    addr day2_input
+    addr day2_input.len
+    deref
+    call day2
+    #get $Day2.sum
+}
+
+#proc day2 {
+    #create $Day2 {
+        len: 0,
+        address: 0,
+        index: 0,
+        range_from: 0,
+        range_to: 0,
+        current_number: 0,
+        sum: 0,
+    }
+}
