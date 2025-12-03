@@ -351,9 +351,9 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             let mut mask = vec![0x00u8; type_size];
             mask[..primitive_size].fill(0xff);
             expr.op_const_type(type_die, mask.into_boxed_slice()); // -> offsetvalue, type, offsetindex, not_mask
-            expr.op(gimli::DW_OP_not); // -> offsetvalue, type, offsetindex, mask
-            expr.op(gimli::DW_OP_swap); // -> offsetvalue, type, mask, offsetindex
-            expr.op(gimli::DW_OP_shl); // -> offsetvalue, type, offsetmask
+            expr.op(gimli::DW_OP_swap); // -> offsetvalue, type, not_mask, offsetindex
+            expr.op(gimli::DW_OP_shl); // -> offsetvalue, type, offsetnot_mask
+            expr.op(gimli::DW_OP_not); // -> offsetvalue, type, offsetmask
             expr.op(gimli::DW_OP_and); // -> offsetvalue, masked_type
             // write field by ORing struct and value
             expr.op(gimli::DW_OP_or);
