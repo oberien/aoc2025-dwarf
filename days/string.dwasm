@@ -52,3 +52,59 @@
     }
     drop
 }
+
+#type $StringSlice {
+    from: $u64,
+    to: $u64,
+    index: $u64,
+}
+// Stack before:
+//   $String, from (incl), to (excl)
+// Stack after:
+//   $String
+#proc string_slice {
+    // init work-struct
+    #create $StringSlice {
+        from: 0,
+        to: 0,
+        index: 0,
+    }
+    swap
+    #set $StringSlice.to
+    swap
+    #set $StringSlice.from
+
+    // init sliced string
+    #create $String {
+        len: 0,
+        data: [0; 254],
+    }
+    pick 1
+    #get $StringSlice.to
+    pick 2
+    #get $StringSlice.from
+    minus
+    #set $String.len
+    swap
+
+    // copy, -> $String(orig), $String(slice), $StringSlice
+    #while (dup, #get $StringSlice.from) < (pick 1, #get $StringSlice.to) {
+        dup
+        #get $StringSlice.from // -> orig, slice, $StringSlice, index
+        pick 3
+        swap
+        #getindex $String.data // -> orig, slice, $StringSlice, char
+        swap
+        rot // -> orig, $StringSlice, slice, char
+        pick 2
+        #get $StringSlice.index // -> orig, $StringSlice, slice, char, index
+        #setindex $String.data
+        swap // -> orig, slice, $StringSlice
+
+        #set $StringSlice.from += 1
+        #set $StringSlice.index += 1
+    }
+    drop // -> orig, slice
+    swap // -> slice, orig
+    drop // -> slice
+}
