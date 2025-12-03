@@ -152,7 +152,7 @@ pub enum Instruction<'a> {
     /// Pop a type from the stack and push the value of a (possibly nested) field
     Get(Path<'a>),
     /// Pop a value from the stack and set it as (possibly nested) field of the now-topmost type
-    Set(Path<'a>),
+    Set(Path<'a>, Option<(SetAssign, I64)>),
     /// Pop an index and a type from the stack and push the value of the (possibly nested) array-element at the given index
     GetIndex(Path<'a>),
     /// Pop an index and a value from the stack and set the value as the (possibly nested) array-element at the given index of the now-topmost type
@@ -173,6 +173,23 @@ pub enum CondOp {
     Ge,
     Gt,
     Ne,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum SetAssign {
+    Assign,
+    OpAssign(OpAssign),
+}
+#[derive(Debug, Clone, Copy)]
+pub enum OpAssign {
+    PlusAssign,
+    MinusAssign,
+    MulAssign,
+    DivAssign,
+    ModAssign,
+    BitAndAssign,
+    BitOrAssign,
+    BitXorAssign,
 }
 
 /// A possibly nested field of a type
@@ -309,7 +326,8 @@ impl Display for Instruction<'_> {
             }
             Instruction::Create(custom_type_init) => Display::fmt(custom_type_init, f),
             Instruction::Get(path) => write!(f, "#get {path}"),
-            Instruction::Set(path) => write!(f, "#set {path}"),
+            Instruction::Set(path, None) => write!(f, "#set {path}"),
+            Instruction::Set(path, Some((op, val))) => write!(f, "#set {path} {op} {val}"),
             Instruction::GetIndex(path) => write!(f, "#getindex {path}"),
             Instruction::SetIndex(path) => write!(f, "#setindex {path}"),
         }
@@ -334,6 +352,28 @@ impl Display for CondOp {
             CondOp::Ge => write!(f, ">="),
             CondOp::Gt => write!(f, ">"),
             CondOp::Ne => write!(f, "!="),
+        }
+    }
+}
+impl Display for SetAssign {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SetAssign::Assign => write!(f, "="),
+            SetAssign::OpAssign(op) => Display::fmt(op, f),
+        }
+    }
+}
+impl Display for OpAssign {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OpAssign::PlusAssign => write!(f, "+="),
+            OpAssign::MinusAssign => write!(f, "-="),
+            OpAssign::MulAssign => write!(f, "*="),
+            OpAssign::DivAssign => write!(f, "/="),
+            OpAssign::ModAssign => write!(f, "%="),
+            OpAssign::BitAndAssign => write!(f, "&="),
+            OpAssign::BitOrAssign => write!(f, "|="),
+            OpAssign::BitXorAssign => write!(f, "^="),
         }
     }
 }
@@ -513,8 +553,9 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
             .ignore_then(path())
             .map(Instruction::Get),
         just("#set").padded()
-            .ignore_then(path())
-            .map(Instruction::Set),
+            .ignore_then(path().padded())
+            .then(set_assign().padded().then(i64().padded()).or_not())
+            .map(|(path, assign)| Instruction::Set(path, assign)),
     ))))
 }
 
@@ -537,6 +578,20 @@ fn cond_op<'a>() -> impl Parser<'a, CondOp> + Clone {
         just(">=").to(CondOp::Ge),
         just('>').to(CondOp::Gt),
         just("!=").to(CondOp::Ne),
+    ))
+}
+
+fn set_assign<'a>() -> impl Parser<'a, SetAssign> + Clone {
+    choice((
+        just("=").to(SetAssign::Assign),
+        just("+=").to(SetAssign::OpAssign(OpAssign::PlusAssign)),
+        just("-=").to(SetAssign::OpAssign(OpAssign::MinusAssign)),
+        just("*=").to(SetAssign::OpAssign(OpAssign::MulAssign)),
+        just("/=").to(SetAssign::OpAssign(OpAssign::DivAssign)),
+        just("%=").to(SetAssign::OpAssign(OpAssign::ModAssign)),
+        just("&=").to(SetAssign::OpAssign(OpAssign::BitAndAssign)),
+        just("|=").to(SetAssign::OpAssign(OpAssign::BitOrAssign)),
+        just("^=").to(SetAssign::OpAssign(OpAssign::BitXorAssign)),
     ))
 }
 

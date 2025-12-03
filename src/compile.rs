@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use gimli::write::{Address, Expression, UnitEntryId};
 use itertools::Itertools;
 use crate::dwarf_program::DwarfProgram;
-use crate::parse::{Addr, CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, Path, Primitive, Type, TypeInit, TypeOrGeneric, U64};
+use crate::parse::{Addr, CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, OpAssign, Path, Primitive, SetAssign, Type, TypeInit, TypeOrGeneric, U64};
 
 struct GlobalContext<'a> {
     procedures: HashMap<&'a str, UnitEntryId>,
@@ -261,7 +261,28 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             let data = Vec::from(vec).into_boxed_slice();
             expr.op_const_type(type_die, data);
         }
-        Instruction::Set(Path { typ, path }) => {
+        Instruction::Set(path, Some((op, value))) => {
+            match op {
+                SetAssign::Assign => expr.op_consts(value.number),
+                SetAssign::OpAssign(op) => {
+                    expr.op(gimli::DW_OP_dup);
+                    compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Get(path.clone()));
+                    expr.op_consts(value.number);
+                    match op {
+                        OpAssign::PlusAssign => expr.op(gimli::DW_OP_plus),
+                        OpAssign::MinusAssign => expr.op(gimli::DW_OP_minus),
+                        OpAssign::MulAssign => expr.op(gimli::DW_OP_mul),
+                        OpAssign::DivAssign => expr.op(gimli::DW_OP_div),
+                        OpAssign::ModAssign => expr.op(gimli::DW_OP_mod),
+                        OpAssign::BitAndAssign => expr.op(gimli::DW_OP_and),
+                        OpAssign::BitOrAssign => expr.op(gimli::DW_OP_or),
+                        OpAssign::BitXorAssign => expr.op(gimli::DW_OP_xor),
+                    }
+                }
+            }
+            compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Set(path.clone(), None));
+        }
+        Instruction::Set(Path { typ, path }, None) => {
             let (offset, primitive) = field_offset(typ, &path, global_ctx);
             let primitive_size = primitive_size(primitive);
             let type_size = type_size(Type::Custom(typ), global_ctx);

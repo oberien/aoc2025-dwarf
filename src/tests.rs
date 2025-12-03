@@ -477,3 +477,32 @@ fn test_while() {
         }
     "#, Value::Generic(45));
 }
+
+#[test]
+fn test_set_assign() {
+    let tests = [
+        ("", 2),
+        ("#set $Foo.foo = 42", 42),
+        ("#set $Foo.foo += 42", 44),
+        ("#set $Foo.foo *= 42", 84),
+        ("#set $Foo.foo /= 2", 1),
+        ("#set $Foo.foo %= 2", 0),
+        ("#set $Foo.foo &= 3", 2),
+        ("#set $Foo.foo |= 5", 7),
+        ("#set $Foo.foo ^= 7", 5),
+    ];
+    for (instrs, expected) in tests {
+        run(&format!(r#"
+            #type $Foo {{
+                foo: $u64,
+            }}
+            #var test {{
+                #create $Foo {{
+                    foo: 2,
+                }}
+                {instrs}
+                #get $Foo.foo
+            }}
+        "#), Value::Generic(expected));
+    }
+}
