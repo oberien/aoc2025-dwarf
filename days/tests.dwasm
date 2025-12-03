@@ -6,78 +6,30 @@
 #proc test_string_from_number {
     constu 1
     call string_from_number
-    #if (dup, #get $String.len) != (constu 1) {
-        skip .panic1
+    #create $String { len: 0, data: [0; 254] }
+    #set $String.len = 1
+    #set $String.data[0] = 0x31
+    #if (dup) != (pick 2) {
+        constu 8907431894709842397
+        call panic
     }
-    #if (dup, #get $String.data[0]) != (constu 0x31) {
-        skip .panic2
-    }
-    #if (dup, #get $String.data[1]) != (constu 0) {
-        skip .panic3
-    }
+    drop
     drop
 
     constu 421337
     call string_from_number
-    #if (dup, #get $String.len) != (constu 6) {
-        skip .panic4
-    }
-    #if (dup, #get $String.data[0]) != (constu 0x34) {
-        skip .panic5
-    }
-    #if (dup, #get $String.data[1]) != (constu 0x32) {
-        skip .panic6
-    }
-    #if (dup, #get $String.data[2]) != (constu 0x31) {
-        skip .panic7
-    }
-    #if (dup, #get $String.data[3]) != (constu 0x33) {
-        skip .panic8
-    }
-    #if (dup, #get $String.data[4]) != (constu 0x33) {
-        skip .panic9
-    }
-    #if (dup, #get $String.data[5]) != (constu 0x37) {
-        skip .panic10
-    }
-    #if (dup, #get $String.data[6]) != (constu 0) {
-        skip .panic11
+    #create $String { len: 0, data: [0; 254] }
+    #set $String.len = 6
+    #set $String.data[0] = 0x34
+    #set $String.data[1] = 0x32
+    #set $String.data[2] = 0x31
+    #set $String.data[3] = 0x33
+    #set $String.data[4] = 0x33
+    #set $String.data[5] = 0x37
+    #if (dup) != (pick 2) {
+        constu 4896515384654835
+        call panic
     }
     drop
-    skip .end
-
-.panic1:
-    constu 1564984651358
-    call panic
-.panic2:
-    constu 49864156848486
-    call panic
-.panic3:
-    constu 4564384381866843427
-    call panic
-.panic4:
-    constu 6578924358612977348
-    call panic
-.panic5:
-    constu 2036436978343242930
-    call panic
-.panic6:
-    constu 8097901124097832408
-    call panic
-.panic7:
-    constu 2349807459872463894
-    call panic
-.panic8:
-    constu 290834727943629843
-    call panic
-.panic9:
-    constu 7907892547890420980
-    call panic
-.panic10:
-    constu 792222272504732
-    call panic
-.panic11:
-    constu 5987653246790986544
-    call panic
-.end:
+    drop
 }
