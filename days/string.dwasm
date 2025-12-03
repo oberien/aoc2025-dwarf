@@ -3,15 +3,52 @@
     data: [$u8; 254],
 }
 
+#type $StringFromNumber {
+    index: $u64,
+    number: $u64,
+}
 // Stack before:
 //   number
 // Stack after:
 //   $String
 #proc string_from_number {
+    #create $StringFromNumber {
+        index: 0,
+        number: 0,
+    }
+    swap
+    #set $StringFromNumber.number
+    dup
+    #get $StringFromNumber.number
+    call ilog10
+    #set $StringFromNumber.index
     #create $String {
         len: 0,
         data: [0; 254],
     }
-    swap
+    pick 1
+    #get $StringFromNumber.index
+    #set $String.len
+    swap // -> $String, $StringFromNumber
+    #set $StringFromNumber.index -= 1
+    #while (dup, #get $StringFromNumber.number) > (constu 0) {
+        dup
+        #get $StringFromNumber.number // -> $String, $StringFromNumber, number
+        swap // -> $String, number, $StringFromNumber
+        rot // -> $StringFromNumber, $String, number
+        // get digit
+        constu 10
+        mod
+        // make ascii-digit
+        constu 0x30
+        plus // -> $StringFromNumber, $String, ascii-digit
+        pick 2
+        #get $StringFromNumber.index // -> $StringFromNumber, $String, ascii-digit, index
+        #setindex $String.data
+        swap // -> $String, $StringFromNumber
 
+        #set $StringFromNumber.number /= 10
+        #set $StringFromNumber.index -= 1
+    }
+    drop
 }

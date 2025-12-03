@@ -1,0 +1,17 @@
+// Stack before:
+//   unsigned number
+// Stack after:
+//   ilog10(number)
+#proc ilog10 {
+    constu 0
+    swap
+    #while (dup) > (constu 0) {
+        constu 10
+        div
+        swap
+        constu 1
+        plus
+        swap
+    }
+    drop
+}
