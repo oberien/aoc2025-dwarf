@@ -572,8 +572,8 @@ fn path<'a>() -> impl Parser<'a, Path<'a>> + Clone {
 
 fn cond_op<'a>() -> impl Parser<'a, CondOp> + Clone {
     choice((
-        just('<').to(CondOp::Lt),
         just("<=").to(CondOp::Le),
+        just('<').to(CondOp::Lt),
         just("==").to(CondOp::Eq),
         just(">=").to(CondOp::Ge),
         just('>').to(CondOp::Gt),

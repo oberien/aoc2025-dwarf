@@ -71,7 +71,6 @@ impl DwarfProgram {
                 Ok(EvaluationResult::RequiresTls(_)) => panic!("thread-local storage unsupported"),
                 Ok(EvaluationResult::RequiresCallFrameCfa) => panic!("cfa unsupported"),
                 Ok(EvaluationResult::RequiresAtLocation(die_ref)) => {
-                    println!("die ref {die_ref:?}");
                     let slice = match die_ref {
                         DieReference::UnitRef(offset) => root.entry(offset).unwrap().attr(DW_AT_location).unwrap().unwrap().exprloc_value().unwrap().0,
                         DieReference::DebugInfoRef(_) => unimplemented!("DebugInfoRef into another unit"),
