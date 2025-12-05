@@ -108,3 +108,21 @@
     swap // -> slice, orig
     drop // -> slice
 }
+
+// Splits a string at the given index.
+// Returns [0..index), [index..len)
+// Stack before:
+//     $String, index
+// Stack after:
+//     $String(left), $String(right)
+#proc string_split_at {
+        pick 1 // -> $String, index, $String
+        pick 1 // -> $String, index, $String, index
+        constu 0
+        swap // -> $String, index, $String, 0, index
+        call string_slice // -> $String, index, $String(left)
+        rot // -> $String(left), $String, index
+        pick 1
+        #get $String.len // -> $String(left), $String, index, len
+        call string_slice // -> $String(left), $String(right)
+}

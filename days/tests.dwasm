@@ -1,6 +1,7 @@
 #var tests {
     call test_string_from_number
     call test_string_slice
+    call test_string_split_at
     constu 1
 }
 
@@ -81,6 +82,66 @@
     #set $String.data[1] = 0x33
     #if (dup) != (pick 2) {
         constu 375489615334
+        call panic
+    }
+    drop
+    drop
+
+    drop
+}
+
+#proc test_string_split_at {
+    #create $String { len: 6, data: [0; 254] }
+    #set $String.data[0] = 0x34
+    #set $String.data[1] = 0x32
+    #set $String.data[2] = 0x31
+    #set $String.data[3] = 0x33
+    #set $String.data[4] = 0x33
+    #set $String.data[5] = 0x37
+
+    dup
+    constu 3
+    call string_split_at
+    #create $String { len: 3, data: [0; 254] }
+    #set $String.data[0] = 0x33
+    #set $String.data[1] = 0x33
+    #set $String.data[2] = 0x37
+    #if (dup) != (pick 2) {
+        constu 485612348988
+        call panic
+    }
+    drop
+    drop
+    #create $String { len: 3, data: [0; 254] }
+    #set $String.data[0] = 0x34
+    #set $String.data[1] = 0x32
+    #set $String.data[2] = 0x31
+    #if (dup) != (pick 2) {
+        constu 1098724309
+        call panic
+    }
+    drop
+    drop
+
+    dup
+    constu 1
+    call string_split_at
+    #create $String { len: 5, data: [0; 254] }
+    #set $String.data[0] = 0x32
+    #set $String.data[1] = 0x31
+    #set $String.data[2] = 0x33
+    #set $String.data[3] = 0x33
+    #set $String.data[4] = 0x37
+    #if (dup) != (pick 2) {
+        constu 56483128648645
+        call panic
+    }
+    drop
+    drop
+    #create $String { len: 1, data: [0; 254] }
+    #set $String.data[0] = 0x34
+    #if (dup) != (pick 2) {
+        constu 784655123459
         call panic
     }
     drop
