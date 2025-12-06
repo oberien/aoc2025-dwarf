@@ -435,7 +435,7 @@ fn items<'a>() -> impl Parser<'a, Vec<Item<'a>>> {
 }
 
 fn instructions<'a>(instruction: impl Parser<'a, Instruction<'a>> + Clone) -> impl Parser<'a, Vec<Instruction<'a>>> + Clone {
-    instruction.padded().padded_by(comment().repeated()).padded().repeated().collect()
+    instruction.padded().padded_by(comment().repeated()).padded().padded_by(comment().repeated()).repeated().collect()
 }
 
 fn comment<'a>() -> impl Parser<'a, ()> + Clone {
@@ -557,7 +557,7 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
             .ignore_then(path().padded())
             .then(set_assign().padded().then(i64().padded()).or_not())
             .map(|(path, assign)| Instruction::Set(path, assign)),
-    ))))
+    )))).padded_by(comment().repeated()).padded()
 }
 
 fn path<'a>() -> impl Parser<'a, Path<'a>> + Clone {

@@ -12,19 +12,23 @@
     range_from: $u64,
     range_to: $u64,
     sum: $u64,
+    part12: $u64
 }
 
 #var day2_part1_sample {
     addr day2_sample
     addr day2_sample.len
     deref
+    constu 1
     call day2
     #get $Day2.sum
 }
+// takes ~4min
 #var day2_part1 {
     addr day2_input
     addr day2_input.len
     deref
+    constu 1
     call day2
     #get $Day2.sum
 }
@@ -32,19 +36,22 @@
     addr day2_sample
     addr day2_sample.len
     deref
+    constu 2
     call day2
     #get $Day2.sum
 }
+// takes ~6min
 #var day2_part2 {
     addr day2_input
     addr day2_input.len
     deref
+    constu 2
     call day2
     #get $Day2.sum
 }
 
 // Stack before:
-//   input_addr, input_len
+//   input_addr, input_len, part12
 #proc day2 {
     #create $Day2 {
         len: 0,
@@ -53,7 +60,10 @@
         range_from: 0,
         range_to: 0,
         sum: 0,
+        part12: 0,
     }
+    swap
+    #set $Day2.part12
     swap
     #set $Day2.len
     swap
@@ -85,13 +95,19 @@
         dup
         #get $Day2.range_from
         call string_from_number
-        // split the string at the middle
-        dup
-        #get $String.len
-        constu 2
-        div // -> $Day2, $String, middle-index
-        call string_split_at // -> $Day2, left, right
-        #if (nop) == (nop) {
+        pick 1
+        #get $Day2.part12
+        #if (dup) == (constu 1) {
+            drop
+            call day2_part1_check_invalid
+        } #else #if (dup) == (constu 2) {
+            drop
+            call day2_part2_check_invalid
+        } #else {
+            constu 8974156843
+            call panic
+        }
+        #if () == (constu 1) {
             dup
             #get $Day2.range_from
             pick 1
@@ -128,6 +144,74 @@
     #set $Day2.index += 1
 
     skip .loop
+.end:
+}
+
+// Stack before:
+//     $Day2, $String
+// Stack after:
+//     $Day2, eq-bool
+#proc day2_part1_check_invalid {
+    // split the string at the middle
+    dup
+    #get $String.len
+    constu 2
+    div // -> $Day2, $String, middle-index
+    call string_split_at // -> $Day2, left, right
+    eq
+}
+
+// Stack before:
+//     $Day2, $String
+// Stack after:
+//     $Day2, eq-bool
+#proc day2_part2_check_invalid {
+    // get half-length
+    dup
+    #get $String.len
+    constu 2
+    div // -> $Day2, $String, half-len
+    constu 1 // -> $Day2, $String, half-len, i
+    #while (dup) <= (pick 2) {
+        rot // -> $Day2, i, $String, half-len
+        rot // -> $Day2, half-len, i, $String
+        // check if string-length is divisible by the index
+        // (we don't need to check if "11111" consists only of repeating "11")
+        dup
+        #get $String.len // -> $Day2, half-len, i, $String, len
+        #if (dup, pick 3, mod) == (constu 0) {
+            pick 1 // -> $Day2, half-len, i, $String, len, $String
+            constu 0 // -> $Day2, half-len, i, $String, len, $String, 0
+            pick 4 // -> $Day2, half-len, i, $String, len, $String, 0, i
+            call string_slice // -> $Day2, half-len, i, $String, len, slice
+            swap // -> $Day2, half-len, i, $String, slice, len
+            pick 3 // -> $Day2, half-len, i, $String, slice, len, i
+            div // -> $Day2, half-len, i, $String, slice, n
+            call string_repeat // -> $Day2, half-len, i, $String, repeated
+            pick 1 // -> $Day2, half-len, i, $String, repeated, $String
+            #if () == () {
+                drop
+                drop
+                drop
+                skip .success
+            }
+            rot // -> $Day2, $String, half-len, i
+        } #else {
+            drop
+            rot
+        }
+        constu 1
+        plus
+    }
+    drop
+    drop
+    drop
+    constu 0
+    skip .end
+
+.success:
+    constu 1
+    skip .end
 .end:
 }
 
