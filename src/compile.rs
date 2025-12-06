@@ -171,7 +171,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
         Instruction::Ne => expr.op(gimli::DW_OP_ne),
         Instruction::Skip(label) => fn_ctx.control_flow_targets.push((expr.op_skip(), label.to_string())),
         Instruction::Bra(label) => fn_ctx.control_flow_targets.push((expr.op_bra(), label.to_string())),
-        Instruction::Call(name) => expr.op_call(global_ctx.procedures[name]),
+        Instruction::Call(name) => expr.op_call(*global_ctx.procedures.get(name).unwrap_or_else(|| panic!("function {name} not found"))),
         Instruction::Convert(typ) => expr.op_convert(match typ {
             TypeOrGeneric::Generic => None,
             TypeOrGeneric::Type(typ) => Some(global_ctx.type_dies[&typ]),
