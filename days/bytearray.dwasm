@@ -1,0 +1,26 @@
+#type $Bytearray {
+    len: $u8,
+    data: [$u8; 254],
+}
+
+// Returns the first index of the given element, or -1 if it wasn't found
+// Stack before:
+//     #Bytearray, number
+// Stack after:
+//     index
+#proc bytearray_index_of {
+    constu 0 // -> $Bytearray, number, index
+    #while (dup) < (pick 3, #get $Bytearray.len) {
+        #if (pick 2, pick 1, #getindex $Bytearray.data) == (pick 2) {
+            swap
+            drop
+            skip .end
+        }
+        constu 1
+        plus
+    }
+    drop
+    drop
+    consts -1
+.end:
+}

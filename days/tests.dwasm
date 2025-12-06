@@ -3,6 +3,7 @@
     call test_string_slice
     call test_string_split_at
     call test_string_repeat
+    call test_bytearray_index_of
     #debug
     constu 1
 }
@@ -169,6 +170,78 @@
     #set $String.data[5] = 0x32
     #if (dup) != (pick 2) {
         constu 784681538
+        call panic
+    }
+    drop
+    drop
+
+    drop
+}
+
+#proc test_bytearray_index_of {
+    #create $Bytearray { len: 6, data: [0; 254] }
+    #set $String.data[0] = 1
+    #set $String.data[1] = 1
+    #set $String.data[2] = 2
+    #set $String.data[3] = 4
+    #set $String.data[4] = 8
+    #set $String.data[5] = 16
+
+    dup
+    constu 1
+    call bytearray_index_of
+    #if (dup) != (constu 0) {
+        constu 48961532454638
+        call panic
+    }
+    drop
+    drop
+
+    dup
+    constu 2
+    call bytearray_index_of
+    #if (dup) != (constu 2) {
+        constu 4861543245498
+        call panic
+    }
+    drop
+    drop
+
+    dup
+    constu 4
+    call bytearray_index_of
+    #if (dup) != (constu 3) {
+        constu 189263498710982
+        call panic
+    }
+    drop
+    drop
+
+    dup
+    constu 8
+    call bytearray_index_of
+    #if (dup) != (constu 4) {
+        constu 678913132578
+        call panic
+    }
+    drop
+    drop
+
+    dup
+    constu 16
+    call bytearray_index_of
+    #if (dup) != (constu 5) {
+        constu 89712639784071982
+        call panic
+    }
+    drop
+    drop
+
+    dup
+    constu 3
+    call bytearray_index_of
+    #if (dup) != (consts -1) {
+        constu 981293787473120
         call panic
     }
     drop
