@@ -1,11 +1,21 @@
 #var tests {
+    #debug 0
     call test_string_from_number
+    #debug 1
     call test_string_slice
+    #debug 2
     call test_string_split_at
+    #debug 3
     call test_string_repeat
+    #debug 4
     call test_bytearray_index_of
+    #debug 5
     call test_bytearray_max
-    #debug
+    #debug 6
+    call test_rodata_reader_read_char
+    #debug 7
+    call test_rodata_reader_read_line
+    #debug 8
     constu 1
 }
 
@@ -262,6 +272,91 @@
     call bytearray_max
     #if (dup) != (constu 10) {
         constu 10923489471230
+        call panic
+    }
+    drop
+
+    drop
+}
+
+#rodata test_rodata_reader_data {
+    #u8 'a', 'b', 'c', '\n', '\n', 'd', 'e', '\n'
+}
+#proc test_rodata_reader_read_char {
+    addr test_rodata_reader_data
+    addr test_rodata_reader_data.len
+    call rodata_reader_new
+
+    call rodata_reader_read_char
+    #if (dup) != (constu 'a') {
+        constu 12987318
+        call panic
+    }
+    drop
+
+    call rodata_reader_read_char
+    #if (dup) != (constu 'b') {
+        constu 98027359821
+        call panic
+    }
+    drop
+
+    call rodata_reader_read_char
+    #if (dup) != (constu 'c') {
+        constu 1983274898
+        call panic
+    }
+    drop
+
+    call rodata_reader_read_char
+    #if (dup) != (constu '\n') {
+        constu 3247189193274
+        call panic
+    }
+    drop
+
+    drop
+}
+#proc test_rodata_reader_read_line {
+    addr test_rodata_reader_data
+    addr test_rodata_reader_data.len
+    call rodata_reader_new
+
+    call rodata_reader_read_line
+    #create $String { len: 3, data: [0; 254] }
+    #set $String.data[0] = 'a'
+    #set $String.data[1] = 'b'
+    #set $String.data[2] = 'c'
+    #if (dup) != (pick 2) {
+        constu 91780269034
+        call panic
+    }
+    drop
+    drop
+
+    call rodata_reader_read_line
+    #create $String { len: 0, data: [0; 254] }
+    #if (dup) != (pick 2) {
+        constu 987123679423
+        call panic
+    }
+    drop
+    drop
+
+    call rodata_reader_read_line
+    #create $String { len: 2, data: [0; 254] }
+    #set $String.data[0] = 'd'
+    #set $String.data[1] = 'e'
+    #if (dup) != (pick 2) {
+        constu 9217438327689
+        call panic
+    }
+    drop
+    drop
+
+    call rodata_reader_is_eof
+    #if (dup) != (constu 1) {
+        constu 198032478399
         call panic
     }
     drop

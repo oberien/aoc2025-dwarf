@@ -1,8 +1,16 @@
+#type $RodataReader {
+    address: $u64,
+    end_address: $u64,
+}
+
+
 #type $ParseNumber {
     number: $u64,
     index: $u64,
     address: $u64,
 }
+// Parse a decimal number from a string at the given address tarting at the given index.
+// Will return the number and the index after the number in the returned type
 // Stack before:
 //   $ParseNumber
 // Stack after:
@@ -47,3 +55,93 @@
 .end:
 }
 
+// Create a new $RodataReader
+// Stack before:
+//     addr, addr_of_len
+// Stack after:
+//     $RodataReader
+#proc rodata_reader_new {
+    #create $RodataReader {
+        address: 0,
+        end_address: 0,
+    } // -> addr, addr_of_len, $RodataReader
+    pick 2 // -> addr, addr_of_len, $RodataReader, addr
+    #set $RodataReader.address
+    rot // -> $RodataReader, addr, addr_of_len
+    deref
+    plus
+    #set $RodataReader.end_address
+}
+
+// Check if the $RodataReader is at its end.
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, bool
+#proc rodata_reader_is_eof {
+    dup
+    #get $RodataReader.address
+    pick 1
+    #get $RodataReader.end_address
+    ge
+}
+
+// Read a single char.
+// Panics if the reader reached the end.
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, char
+#proc rodata_reader_read_char {
+    #if (call rodata_reader_is_eof) == (constu 1) {
+        constu 910823749081723
+        call panic
+    }
+
+    dup
+    #get $RodataReader.address
+    deref_size 1
+    swap
+    #set $RodataReader.address += 1
+    swap
+}
+
+// Read a line into a $String, excluding the newline (but consuming it).
+// Panics if the line has more than 254 bytes.
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, $String
+#proc rodata_reader_read_line {
+    constu 0 // -> $RodataReader, index
+    #create $String {
+        len: 0,
+        data: [0; 254],
+    } // -> $RodataReader, index, $String
+
+    #while (
+        rot, rot, // -> index, $String, $RodataReader
+        call rodata_reader_read_char, // -> index, $String, $RodataReader, char
+        dup
+    ) != (constu '\n') {
+        // -> index, $String, $RodataReader, char
+        #if (pick 3) >= (constu 254) {
+            constu 19782374091873
+            call panic
+        }
+
+        swap // -> index, $String, char, $RodataReader
+        rot // -> index, $RodataReader, $String, char
+        pick 3 // -> index, $RodataReader, $String, char, index
+        #setindex $String.data // -> index, $RodataReader, $String
+        rot // -> $String, index, $RodataReader
+        rot // -> $RodataReader, $String, index
+        constu 1
+        plus
+        swap // -> $RodataReader, index, $String
+    }
+    drop
+    rot // -> $RodataReader, index, $String
+    swap // -> $RodataReader, $String, index
+    #set $String.len // -> $RodataReader, $String
+}
