@@ -143,10 +143,10 @@ pub enum Instruction<'a> {
     ///
     /// encoded using (constu num?); DW_OP_addr __debug_stack; DW_OP_drop; (DW_OP_drop?)
     Debug(Option<U64>),
-    /// Condition-Lhs, Condition-Op, Condition-Rhs, Then, Else
-    IfElse(Vec<(Vec<Instruction<'a>>, CondOp, Vec<Instruction<'a>>, Vec<Instruction<'a>>)>, Vec<Instruction<'a>>),
+    /// Condition, Then, Else
+    IfElse(Vec<(Condition<'a>, Vec<Instruction<'a>>)>, Vec<Instruction<'a>>),
     /// Condition-Lhs, Condition-Op, Condition-Rhs, Body
-    While(Vec<Instruction<'a>>, CondOp, Vec<Instruction<'a>>, Vec<Instruction<'a>>),
+    While(Condition<'a>, Vec<Instruction<'a>>),
     /// Create and push a new instance of a custom type
     Create(CustomTypeInit<'a>),
     /// Pop a type from the stack and push the value of a (possibly nested) field
@@ -173,6 +173,13 @@ pub enum CondOp {
     Ge,
     Gt,
     Ne,
+}
+
+#[derive(Debug, Clone)]
+pub struct Condition<'a> {
+    pub lhs: Vec<Instruction<'a>>,
+    pub op: CondOp,
+    pub rhs: Vec<Instruction<'a>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -278,7 +285,7 @@ impl Display for Instruction<'_> {
             Instruction::Debug(Some(num)) => write!(f, "#debug {num}"),
             Instruction::Debug(None) => write!(f, "#debug"),
             Instruction::IfElse(ifs, els) => {
-                for (i, (lhs, op, rhs, then)) in ifs.iter().enumerate() {
+                for (i, (Condition { lhs, op, rhs }, then)) in ifs.iter().enumerate() {
                     write!(f, "#if (")?;
                     for lhs in lhs {
                         write!(f, "{lhs}, ")?;
@@ -309,7 +316,7 @@ impl Display for Instruction<'_> {
                 }
                 Ok(())
             },
-            Instruction::While(lhs, op, rhs, body) => {
+            Instruction::While(Condition { lhs, op, rhs }, body) => {
                 write!(f, "#while (")?;
                 for lhs in lhs {
                     write!(f, "{lhs}, ")?;
@@ -502,17 +509,11 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
         just("#debug").ignore_then(whitespace().ignore_then(u64()).or_not()).map(Instruction::Debug),
         just("#if")
             .padded().padded_by(comment().repeated())
-            .ignore_then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))
-            .padded().padded_by(comment().repeated())
-            .then(cond_op().padded())
-            .padded().padded_by(comment().repeated())
-            .then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))
+            .ignore_then(condition(instruction.clone()))
             .padded().padded_by(comment().repeated())
             .then_ignore(just('{').padded())
             .padded().padded_by(comment().repeated())
             .then(instructions(instruction.clone()))
-            .padded().padded_by(comment().repeated())
-            .map(|(((lhs, cond_op), rhs), then)| (lhs, cond_op, rhs, then))
             .padded().padded_by(comment().repeated())
             .then_ignore(just('}').padded())
             .padded().padded_by(comment().repeated())
@@ -529,18 +530,13 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
                     .map(Option::unwrap_or_default)
             ).map(|(ifs, els)| Instruction::IfElse(ifs, els)),
         just("#while").padded().padded_by(comment().repeated())
-            .ignore_then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))
-            .padded().padded_by(comment().repeated())
-            .then(cond_op().padded())
-            .padded().padded_by(comment().repeated())
-            .then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))
-            .padded().padded_by(comment().repeated())
+            .ignore_then(condition(instruction.clone()))
             .then_ignore(just('{').padded())
             .padded().padded_by(comment().repeated())
             .then(instructions(instruction.clone()))
             .padded().padded_by(comment().repeated())
             .then_ignore(just('}').padded())
-            .map(|(((lhs, cond_op), rhs), body)| Instruction::While(lhs, cond_op, rhs, body)),
+            .map(|(cond, body)| Instruction::While(cond, body)),
         just("#create").padded()
             .ignore_then(custom_type_init())
             .map(Instruction::Create),
@@ -580,6 +576,20 @@ fn cond_op<'a>() -> impl Parser<'a, CondOp> + Clone {
         just('>').to(CondOp::Gt),
         just("!=").to(CondOp::Ne),
     ))
+}
+
+fn condition<'a>(instruction: impl Parser<'a, Instruction<'a>> + Clone) -> impl Parser<'a, Condition<'a>> + Clone {
+    let instructions = instruction
+        .padded_by(comment().padded().repeated()).padded()
+        .separated_by(just(',')).allow_trailing()
+        .collect::<Vec<_>>()
+        .delimited_by(just('('), just(')'));
+
+    instructions.clone().padded().padded_by(comment().repeated().padded())
+        .then(cond_op().padded()).padded().padded_by(comment().repeated().padded())
+        .then(instructions)
+        .padded().padded_by(comment().repeated().padded())
+        .map(|((lhs, op), rhs)| Condition { lhs, op, rhs })
 }
 
 fn set_assign<'a>() -> impl Parser<'a, SetAssign> + Clone {

@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use gimli::write::{Address, Expression, UnitEntryId};
 use itertools::Itertools;
 use crate::dwarf_program::DwarfProgram;
-use crate::parse::{Addr, CondOp, CustomType, CustomTypeInit, DefineData, Instruction, Item, OpAssign, Path, Primitive, SetAssign, Type, TypeInit, TypeOrGeneric, U64};
+use crate::parse::{Addr, CondOp, Condition, CustomType, CustomTypeInit, DefineData, Instruction, Item, OpAssign, Path, Primitive, SetAssign, Type, TypeInit, TypeOrGeneric, U64};
 
 struct GlobalContext<'a> {
     procedures: HashMap<&'a str, UnitEntryId>,
@@ -195,7 +195,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
         },
         Instruction::IfElse(ifs, els) => {
             let end_label = global_ctx.anonymous_label();
-            for (lhs, op, rhs, then) in ifs {
+            for (Condition { lhs, op, rhs }, then) in ifs {
                 // a < b needs to be translated as
                 // compile(a)
                 // compile(b)
@@ -230,7 +230,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             }
             compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&end_label));
         }
-        Instruction::While(lhs, op, rhs, body) => {
+        Instruction::While(Condition { lhs, op, rhs }, body) => {
             let loop_label = global_ctx.anonymous_label();
             let end_label = global_ctx.anonymous_label();
             // a < b needs to be translated as
