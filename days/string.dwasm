@@ -126,3 +126,48 @@
         #get $String.len // -> $String(left), $String, index, len
         call string_slice // -> $String(left), $String(right)
 }
+
+// Repeat the given string n times
+// Stack before:
+//     $String, n
+// Stack after:
+//     $String
+#proc string_repeat {
+    // "ab".repeat(3) => "ababab" -> we need to append n-1 times
+    constu 1
+    minus
+    pick 1
+    #get $String.len // -> $String, n, orig_len
+    rot // -> orig_len, $String, n
+    #while (dup) > (constu 0) {
+        swap // -> orig_len, n, $String
+        constu 0 // -> orig_len, n, $String, index
+        #while (dup) < (pick 4) {
+            pick 1
+            pick 1
+            #getindex $String.data // -> orig_len, n, $String, index, char
+            swap // -> orig_len, n, $String, char, index
+            rot // -> orig_len, n, index, $String, char
+            pick 2 // -> orig_len, n, index, $String, char, index
+            pick 2
+            #get $String.len // -> orig_len, n, index, $String, char, index, len
+            plus // -> orig_len, n, index, $String, char, new_index
+            #setindex $String.data // -> orig_len, n, index, $String
+            swap // -> orig_len, n, $String, index
+            constu 1
+            plus
+        }
+        drop // -> orig_len, n, $String
+        dup
+        #get $String.len
+        pick 3
+        plus
+        #set $String.len // -> orig_len, n, $String
+        swap // -> orig_len, $String, n
+        constu 1
+        minus
+    }
+    drop
+    swap
+    drop
+}

@@ -2,6 +2,8 @@
     call test_string_from_number
     call test_string_slice
     call test_string_split_at
+    call test_string_repeat
+    #debug
     constu 1
 }
 
@@ -142,6 +144,31 @@
     #set $String.data[0] = 0x34
     #if (dup) != (pick 2) {
         constu 784655123459
+        call panic
+    }
+    drop
+    drop
+
+    drop
+}
+
+#proc test_string_repeat {
+    #create $String { len: 2, data: [0; 254] }
+    #set $String.data[0] = 0x34
+    #set $String.data[1] = 0x32
+
+    dup
+    constu 3
+    call string_repeat
+    #create $String { len: 6, data: [0; 254] }
+    #set $String.data[0] = 0x34
+    #set $String.data[1] = 0x32
+    #set $String.data[2] = 0x34
+    #set $String.data[3] = 0x32
+    #set $String.data[4] = 0x34
+    #set $String.data[5] = 0x32
+    #if (dup) != (pick 2) {
+        constu 784681538
         call panic
     }
     drop
