@@ -61,23 +61,8 @@
 
 .loop:
     // parse first number
-    #create $ParseNumber { number: 0, index: 0, address: 0 }
-    pick 1
-    #get $Day2.address
-    #set $ParseNumber.address
-    pick 1
-    #get $Day2.index
-    #set $ParseNumber.index
-    call parse_number_dec
-    swap // -> $ParseNumber, $Day2
-    pick 1
-    #get $ParseNumber.index
-    #set $Day2.index
-    pick 1
-    #get $ParseNumber.number
+    call day2_parse_range_number
     #set $Day2.range_from
-    swap
-    drop
 
     // parse '-'
     dup
@@ -92,23 +77,8 @@
     #set $Day2.index += 1
 
     // parse second number
-    #create $ParseNumber { number: 0, index: 0, address: 0 }
-    pick 1
-    #get $Day2.address
-    #set $ParseNumber.address
-    pick 1
-    #get $Day2.index
-    #set $ParseNumber.index
-    call parse_number_dec
-    swap // -> $ParseNumber, $Day2
-    pick 1
-    #get $ParseNumber.index
-    #set $Day2.index
-    pick 1
-    #get $ParseNumber.number
+    call day2_parse_range_number
     #set $Day2.range_to
-    swap
-    drop
 
     // iterate over all numbers in the range (inclusive end)
     #while (dup, #get $Day2.range_from) <= (pick 1, #get $Day2.range_to) {
@@ -117,19 +87,10 @@
         call string_from_number
         // split the string at the middle
         dup
-        dup
         #get $String.len
         constu 2
-        div // -> $Day2, $String, $String, half-len
-        dup
-        rot // -> $Day2, $String, half-len, $String, half-len
-        constu 0
-        swap // -> $Day2, $String, half-len, $String, 0, half-len
-        call string_slice // -> $Day2, $String, half-len, first-half
-        rot // -> $Day2, first-half, $String, half-len
-        pick 1
-        #get $String.len // -> $Day2, first-half, $String, half-len, len
-        call string_slice // -> $Day2, first-half, second-half
+        div // -> $Day2, $String, middle-index
+        call string_split_at // -> $Day2, left, right
         #if (nop) == (nop) {
             dup
             #get $Day2.range_from
@@ -168,4 +129,26 @@
 
     skip .loop
 .end:
+}
+
+
+// Stack before:
+//     $Day2
+// Stack after:
+//     $Day2, number
+#proc day2_parse_range_number {
+    #create $ParseNumber { number: 0, index: 0, address: 0 }
+    pick 1
+    #get $Day2.address
+    #set $ParseNumber.address
+    pick 1
+    #get $Day2.index
+    #set $ParseNumber.index
+    call parse_number_dec
+    swap // -> $ParseNumber, $Day2
+    pick 1
+    #get $ParseNumber.index
+    #set $Day2.index // -> $ParseNumber, $Day2
+    swap // -> $Day2, $ParseNumber
+    #get $ParseNumber.number // -> $Day2, number
 }
