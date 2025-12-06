@@ -139,10 +139,10 @@ pub enum Instruction<'a> {
 
     // CUSTOM "INSTRUCTIONS"
     Label(&'a str),
-    /// prints the current value-stack
+    /// prints the current value-stack (including the optional number on top)
     ///
-    /// encoded using DW_OP_addr __debug_stack; DW_OP_drop
-    Debug,
+    /// encoded using (constu num?); DW_OP_addr __debug_stack; DW_OP_drop; (DW_OP_drop?)
+    Debug(Option<U64>),
     /// Condition-Lhs, Condition-Op, Condition-Rhs, Then, Else
     IfElse(Vec<(Vec<Instruction<'a>>, CondOp, Vec<Instruction<'a>>, Vec<Instruction<'a>>)>, Vec<Instruction<'a>>),
     /// Condition-Lhs, Condition-Op, Condition-Rhs, Body
@@ -275,7 +275,8 @@ impl Display for Instruction<'_> {
             Instruction::Reinterpret(typ) => write!(f, "reinterpret {typ}"),
             Instruction::Nop => write!(f, "nop"),
             Instruction::Label(label) => write!(f, "{label}:"),
-            Instruction::Debug => write!(f, "#debug"),
+            Instruction::Debug(Some(num)) => write!(f, "#debug {num}"),
+            Instruction::Debug(None) => write!(f, "#debug"),
             Instruction::IfElse(ifs, els) => {
                 for (i, (lhs, op, rhs, then)) in ifs.iter().enumerate() {
                     write!(f, "#if (")?;
@@ -498,7 +499,7 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
         just("reinterpret").ignore_then(whitespace()).ignore_then(typ_or_generic()).map(Instruction::Reinterpret),
         just("nop").to(Instruction::Nop),
         label().then_ignore(just(':')).map(Instruction::Label),
-        just("#debug").to(Instruction::Debug),
+        just("#debug").ignore_then(whitespace().ignore_then(u64()).or_not()).map(Instruction::Debug),
         just("#if")
             .padded().padded_by(comment().repeated())
             .ignore_then(instruction.clone().padded().separated_by(just(',')).allow_trailing().collect::<Vec<_>>().delimited_by(just('('), just(')')))

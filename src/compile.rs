@@ -182,10 +182,16 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
         }),
         Instruction::Nop => expr.op(gimli::DW_OP_nop),
         Instruction::Label(label) => assert!(fn_ctx.label_locations.insert(label.to_string(), expr.next_index()).is_none()),
-        Instruction::Debug => {
+        Instruction::Debug(num) => {
+            if let Some(num) = num {
+                expr.op_constu(num.number);
+            }
             let data_index = program.rodata_data_index("__debug_stack");
             expr.op_addr(Address::Symbol { symbol: data_index, addend: 0 });
             expr.op(gimli::DW_OP_drop);
+            if num.is_some() {
+                expr.op(gimli::DW_OP_drop);
+            }
         },
         Instruction::IfElse(ifs, els) => {
             let end_label = global_ctx.anonymous_label();
