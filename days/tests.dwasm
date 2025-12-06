@@ -4,6 +4,7 @@
     call test_string_split_at
     call test_string_repeat
     call test_bytearray_index_of
+    call test_bytearray_max
     #debug
     constu 1
 }
@@ -245,6 +246,24 @@
         call panic
     }
     drop
+    drop
+
+    drop
+}
+
+#proc test_bytearray_max {
+    #create $Bytearray { len: 4, data: [0; 254] }
+    #set $String.data[0] = 1
+    #set $String.data[1] = 10
+    #set $String.data[2] = 8
+    #set $String.data[3] = 10
+
+    dup
+    call bytearray_max
+    #if (dup) != (constu 10) {
+        constu 10923489471230
+        call panic
+    }
     drop
 
     drop

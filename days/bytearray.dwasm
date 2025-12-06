@@ -24,3 +24,30 @@
     consts -1
 .end:
 }
+
+// Returns the maximum element of the Bytearray
+// Stack before:
+//     $Bytearray
+// Stack after:
+//     max
+#proc bytearray_max {
+    constu 0
+    constu 0 // -> $Bytearray, max, index
+    #while (dup) < (pick 3, #get $Bytearray.len) {
+        pick 2
+        pick 1
+        #getindex $Bytearray.data // -> $Bytearray, max, index, current
+        #if (dup) > (pick 3) {
+            rot // -> $Bytearray, current, max, index
+            swap // -> $Bytearray, current, index, max
+            drop // -> $Bytearray, current, index
+        } #else {
+            drop
+        }
+        constu 1
+        plus
+    }
+    drop // -> $Bytearray, max
+    swap // -> max, $Bytearray
+    drop // -> max
+}
