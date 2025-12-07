@@ -206,7 +206,6 @@
         call panic
     }
     drop
-    drop
 
     dup
     constu 2
@@ -215,7 +214,6 @@
         constu 4861543245498
         call panic
     }
-    drop
     drop
 
     dup
@@ -226,7 +224,6 @@
         call panic
     }
     drop
-    drop
 
     dup
     constu 8
@@ -235,7 +232,6 @@
         constu 678913132578
         call panic
     }
-    drop
     drop
 
     dup
@@ -246,7 +242,6 @@
         call panic
     }
     drop
-    drop
 
     dup
     constu 3
@@ -255,7 +250,6 @@
         constu 981293787473120
         call panic
     }
-    drop
     drop
 
     drop

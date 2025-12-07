@@ -12,15 +12,17 @@
     constu 0 // -> $Bytearray, number, index
     #while (dup) < (pick 3, #get $Bytearray.len) {
         #if (pick 2, pick 1, #getindex $Bytearray.data) == (pick 2) {
-            swap
-            drop
+            rot // -> index, $Bytearray, number
+            drop // -> index, $Bytearray
+            drop // -> index
             skip .end
         }
         constu 1
         plus
     }
-    drop
-    drop
+    drop // -> $Bytearray, number
+    drop // -> $Bytearray
+    drop // ->
     consts -1
 .end:
 }
