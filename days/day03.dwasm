@@ -1,0 +1,160 @@
+#rodata day3_sample {
+    #include_file "days/inputs/day03_sample"
+}
+#rodata day3_input {
+    #include_file "days/inputs/day03_input"
+}
+
+#type $Day3 {
+    reader: $RodataReader,
+    first_index: $u64,
+    second_index: $u64,
+    sum: $u64,
+    part12: $u64
+}
+
+#var day3_part1_sample {
+    addr day3_sample
+    addr day3_sample.len
+    call rodata_reader_new
+    constu 1
+    call day3
+    #get $Day3.sum
+}
+// takes ~4min
+#var day3_part1 {
+    addr day3_input
+    addr day3_input.len
+    call rodata_reader_new
+    constu 1
+    call day3
+    #get $Day3.sum
+}
+#var day3_part3_sample {
+    addr day3_sample
+    addr day3_sample.len
+    call rodata_reader_new
+    constu 2
+    call day3
+    #get $Day3.sum
+}
+// takes ~6min
+#var day3_part3 {
+    addr day3_input
+    addr day3_input.len
+    call rodata_reader_new
+    constu 2
+    call day3
+    #get $Day3.sum
+}
+
+// Stack before:
+//   $RodataReader, part12
+#proc day3 {
+    #create $Day3 {
+        reader: $RodataReader {
+            address: 0,
+            end_address: 0,
+        },
+        first_index: 0,
+        second_index: 0,
+        sum: 0,
+        part12: 0,
+    }
+    swap
+    #set $Day3.part12
+    swap
+    #set $Day3.reader // -> $Day3
+
+    #while (dup, #get $Day3.reader, call rodata_reader_is_eof) != (constu 1) {
+        // get line
+        call rodata_reader_read_line
+        rot
+        #set $Day3.reader // -> $String, $Day3
+
+        // get index of first highest number (skip last digit as we need one digit behind)
+        pick 1
+        dup // -> $String, $Day3, $String, $String
+        #set $String.len -= 1
+        call bytearray_max // -> $String, $Day3, $String, max
+        call bytearray_index_of // -> $String, $Day3, first_index
+        dup
+        rot // -> $String, first_index, $Day3, first_index
+        #set $Day3.first_index
+
+        // slice from behind first_index
+        swap // -> $String, $Day3, first_index
+        constu 1
+        plus // -> $String, $Day3, first_index+1
+        dup
+        rot // -> $String, first_index+1, $Day3, first_index+1
+        pick 3
+        #get $String.len // -> $String, first_index+1, $Day3, first_index+1, len
+        pick 4
+        rot // -> $String, first_index+1, $Day3, $String, first_index+1, len
+        call string_slice // -> $String, first_index+1, $Day3, slice
+
+        // get index of second highest number (can include last digit this time)
+        dup
+        call bytearray_max // -> $String, first_index+1, $Day3, slice, max
+        call bytearray_index_of // -> $String, first_index+1, $Day3, second_index
+        // add first_index + 1 to second_index to get the actual second index
+        swap
+        rot // -> $String, $Day3, first_index+1, second_index
+        plus // -> $String, $Day3, second_index
+        #set $Day3.second_index // -> $String, $Day3
+
+        // get and combine both numbers
+        pick 1
+        pick 1
+        #get $Day3.first_index // -> $String, $Day3, $String, index
+        #getindex $String.data
+        constu 0x30
+        minus
+        constu 10
+        mul // -> $String, $Day3, first
+        pick 2
+        pick 2
+        #get $Day3.second_index
+        #getindex $String.data
+        constu 0x30
+        minus // -> $String, $Day3, first, second
+        plus // -> $String, $Day3, number
+        // add to sum
+        pick 1
+        #get $Day3.sum
+        plus
+        #set $Day3.sum // -> $String, $Day3
+        swap
+        drop // -> $Day3
+    }
+    drop
+}
+
+// Extracts the next number from the given slice, assuming the given
+// number of digits are required
+// Stack before:
+//     $String(slice-left), num_digits_left
+// Stack after:
+//     $String(slice-left-after), scaled_number
+#proc day3_single_step {
+    // create string slice to search max in
+    pick 1
+    #get $String.len // -> $String, num_digits_left, len
+    pick 1
+    constu 1
+    minus // -> $String, num_digits_left, len, num_digits_left-1
+    minus // -> $String, num_digits_left, end
+    constu 0
+    swap // -> $String, num_digits_left, 0, end
+    pick 3
+    rot // -> $String, num_digits_left, $String, 0, end
+    call string_slice // -> $String, num_digits_left, slice
+
+    // get max
+    call bytearray_max // -> $String, num_digits_left, max
+    dup // -> $String, num_digits_left, max, max
+    pick 3 // -> $String, num_digits_left, max, max, $String
+    swap
+    call bytearray_index_of // -> $String, num_digits_left, max, index
+}
