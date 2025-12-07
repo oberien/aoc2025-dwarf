@@ -16,6 +16,8 @@
     #debug 7
     call test_rodata_reader_read_line
     #debug 8
+    call test_pow
+    #debug 9
     constu 1
 }
 
@@ -355,5 +357,43 @@
     }
     drop
 
+    drop
+}
+
+#proc test_pow {
+    constu 2
+    constu 0
+    call pow
+    #if (dup) != (constu 1) {
+        constu 8456312846
+        call panic
+    }
+    drop
+
+    constu 2
+    constu 1
+    call pow
+    #if (dup) != (constu 2) {
+        constu 24789209832047
+        call panic
+    }
+    drop
+
+    constu 2
+    constu 2
+    call pow
+    #if (dup) != (constu 4) {
+        constu 902389742367438743
+        call panic
+    }
+    drop
+
+    constu 2
+    constu 3
+    call pow
+    #if (dup) != (constu 8) {
+        constu 90863478940320987
+        call panic
+    }
     drop
 }

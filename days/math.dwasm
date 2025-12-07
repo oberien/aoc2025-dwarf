@@ -15,3 +15,36 @@
     }
     drop
 }
+
+// A**B by looping
+// Stack before:
+//     base, exponent
+// Stack after:
+//     result
+#proc pow {
+    #if (dup) == (constu 0) {
+        drop
+        drop
+        constu 1
+        skip .end
+    }
+
+    pick 1
+    swap // -> orig_base, number, exponent
+    // by having the base as start-number, we already solved base**1
+    constu 1
+    minus
+    // loop to multiply by orig_base
+    #while (dup) > (constu 0) {
+        constu 1
+        minus
+        swap // -> orig_base, exponent, number
+        pick 2
+        mul // -> ori_base, exponent, number
+        swap
+    }
+    drop
+    swap
+    drop
+.end:
+}
