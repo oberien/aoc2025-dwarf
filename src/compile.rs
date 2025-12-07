@@ -289,14 +289,16 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Set(path.clone(), None));
         }
         Instruction::Set(Path { typ, path }, None) => {
-            let (offset, primitive) = field_offset(typ, &path, global_ctx);
-            let primitive_size = primitive_size(primitive);
+            let (field_offset, field_type) = field_offset(typ, &path, global_ctx);
+            let field_size = type_size(field_type, global_ctx);
             let type_size = type_size(Type::Custom(typ), global_ctx);
             let type_die = global_ctx.type_dies[&Type::Custom(typ)];
-            let left_offset = type_size - primitive_size - offset as usize;
+            let left_offset = type_size - field_size - field_offset as usize;
             // mask topmost stack element
-            expr.op_constu(primitive_mask(primitive));
-            expr.op(gimli::DW_OP_and);
+            if let Type::Primitive(primitive) = field_type {
+                expr.op_constu(primitive_mask(primitive));
+                expr.op(gimli::DW_OP_and);
+            }
             // convert topmost stack element to our type
             expr.op_convert(Some(type_die));
             // shift into correct position
@@ -305,34 +307,41 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             // zero-out our "struct" by ANDing a mask
             expr.op(gimli::DW_OP_swap);
             let mut mask = vec![0xffu8; type_size];
-            mask[left_offset..][..primitive_size].fill(0x00);
+            mask[left_offset..][..field_size].fill(0x00);
             expr.op_const_type(type_die, mask.into_boxed_slice());
             expr.op(gimli::DW_OP_and);
             // write field by ORing struct and value
             expr.op(gimli::DW_OP_or);
         }
         Instruction::Get(Path { typ, path }) => {
-            let (offset, primitive) = field_offset(typ, &path, global_ctx);
-            let primitive_size = primitive_size(primitive);
+            let (field_offset, field_type) = field_offset(typ, &path, global_ctx);
+            let field_size = type_size(field_type, global_ctx);
             let type_size = type_size(Type::Custom(typ), global_ctx);
-            let left_offset = type_size as u8 - primitive_size as u8 - offset;
+            let left_offset = type_size as u8 - field_size as u8 - field_offset;
             let type_die = global_ctx.type_dies[&Type::Custom(typ)];
             expr.op_constu(left_offset as u64 * 8);
             expr.op_convert(Some(type_die));
             expr.op(gimli::DW_OP_shr);
-            expr.op_convert(None);
-            expr.op_constu(primitive_mask(primitive));
-            expr.op(gimli::DW_OP_and);
+            match field_type {
+                Type::Primitive(primitive) => {
+                    expr.op_convert(None);
+                    expr.op_constu(primitive_mask(primitive));
+                    expr.op(gimli::DW_OP_and);
+                },
+                Type::Custom(_) => expr.op_convert(Some(global_ctx.type_dies[&field_type])),
+                Type::Array(..) => unreachable!("{path:?}"),
+            }
         }
         Instruction::SetIndex(path) => {
             assert!(path.path.last().unwrap().1.is_none(), "#setindex's last field must not have an index: {path}");
             let Path { typ, mut path } = path;
             path.last_mut().unwrap().1 = Some(0);
-            let (offset, primitive) = field_offset(typ, &path, global_ctx);
+            let (field_offset, field_type) = field_offset(typ, &path, global_ctx);
+            let Type::Primitive(primitive) = field_type else { unreachable!("setindex {path:?}") };
             let primitive_size = primitive_size(primitive);
             let type_size = type_size(Type::Custom(typ), global_ctx);
             let type_die = global_ctx.type_dies[&Type::Custom(typ)];
-            let left_offset = type_size - primitive_size - offset as usize;
+            let left_offset = type_size - primitive_size - field_offset as usize;
             // -> type, value, element-index
             expr.op_constu(primitive_size as u64 * 8);
             expr.op(gimli::DW_OP_mul); // -> type, value, (bit-)index
@@ -368,10 +377,11 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             assert!(path.path.last().unwrap().1.is_none(), "#getindex's last field must not have an index: {path}");
             let Path { typ, mut path } = path;
             path.last_mut().unwrap().1 = Some(0);
-            let (offset, primitive) = field_offset(typ, &path, global_ctx);
+            let (field_offset, field_type) = field_offset(typ, &path, global_ctx);
+            let Type::Primitive(primitive) = field_type else { unreachable!("getindex {path:?}") };
             let primitive_size = primitive_size(primitive);
             let type_size = type_size(Type::Custom(typ), global_ctx);
-            let left_offset = type_size as u8 - primitive_size as u8 - offset;
+            let left_offset = type_size as u8 - primitive_size as u8 - field_offset;
             let type_die = global_ctx.type_dies[&Type::Custom(typ)];
             // -> type, element-index
             expr.op_constu(primitive_size as u64 * 8);
@@ -516,10 +526,10 @@ fn type_size_internal<'a>(typ: Type<'a>, global_ctx: &GlobalContext<'a>, visited
         }
     }
 }
-fn field_offset(typ: &str, path: &[(&str, Option<usize>)], global_ctx: &GlobalContext<'_>) -> (u8, Primitive) {
+fn field_offset<'a>(typ: &'a str, path: &[(&str, Option<usize>)], global_ctx: &GlobalContext<'a>) -> (u8, Type<'a>) {
     field_offset_internal(Type::Custom(typ), None, path, global_ctx)
 }
-fn field_offset_internal(typ: Type<'_>, index: Option<usize>, path: &[(&str, Option<usize>)], global_ctx: &GlobalContext<'_>) -> (u8, Primitive) {
+fn field_offset_internal<'a>(typ: Type<'a>, index: Option<usize>, path: &[(&str, Option<usize>)], global_ctx: &GlobalContext<'a>) -> (u8, Type<'a>) {
     let type_name = match typ {
         Type::Custom(name) => name,
         Type::Array(primitive, len) => {
@@ -528,16 +538,18 @@ fn field_offset_internal(typ: Type<'_>, index: Option<usize>, path: &[(&str, Opt
             let index = index.unwrap();
             assert!(index < len, "index `{index}` out of bounds len `{len}`");
             let primitive_size = primitive_size(primitive);
-            return ((primitive_size * index).try_into().unwrap(), primitive);
+            return ((primitive_size * index).try_into().unwrap(), Type::Primitive(primitive));
         }
         Type::Primitive(primitive) => {
             assert!(path.is_empty(), "field access reached primitive, but field accesses are left: .{}", path.iter().map(|(field, _)| field).join("."));
-            return (0, primitive)
+            return (0, Type::Primitive(primitive))
         }
     };
     let typ = global_ctx.custom_types.get(type_name)
         .unwrap_or_else(|| panic!("unknown type {type_name}"));
-    assert!(!path.is_empty(), "field access path must end with a primitive, but instead ended with non-primitive {type_name}");
+    if path.is_empty() {
+        return (0, Type::Custom(type_name));
+    }
     assert!(index.is_none(), "field access path has an index for non-array {type_name}, index {}", index.unwrap());
 
     let mut offset = 0u8;

@@ -322,7 +322,7 @@ dependencies = [
 [[package]]
 name = "gimli"
 version = "0.32.3"
-source = "git+https://github.com/oberien/gimli?rev=239c71b0f5afade8af7cbf6496ba49a155ab0143#239c71b0f5afade8af7cbf6496ba49a155ab0143"
+source = "git+https://github.com/oberien/gimli?rev=3986f7e8fef17760550f3bd4083c2d43b4c74e15#3986f7e8fef17760550f3bd4083c2d43b4c74e15"
 dependencies = [
  "fallible-iterator",
  "fnv",

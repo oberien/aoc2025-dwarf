@@ -129,29 +129,46 @@ fn test_const_type_invalid_length_should_panic() {
 fn test_struct() {
     run(r#"
         #type $Foo {
-            foo: $u16,
+            foo: $u32,
             bar: $Bar,
         }
         #type $Bar {
-            baz: $u8,
+            baz: $u16,
+            qux: $u8,
         }
 
         #var test {
             #create $Foo {
-                foo: 0x1100,
+                foo: 0x110000,
                 bar: $Bar {
-                    baz: 0x42,
+                    baz: 0x4100,
+                    qux: 0x0031,
                 },
             }
+
+            // test struct get and set of structs
+            dup
+            #get $Foo.bar
+            dup
+            #get $Bar.baz
+            constu 0x100
+            plus
+            #set $Bar.baz
+            #set $Foo.bar
+
+            // test field access
             dup
             #get $Foo.foo
             pick 1
             #get $Foo.bar.baz
             plus
+            pick 1
+            #get $Foo.bar.qux
+            plus
             #set $Foo.foo
             #get $Foo.foo
         }
-    "#, Value::Generic(0x1142))
+    "#, Value::Generic(0x114231))
 }
 
 #[test]

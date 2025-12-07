@@ -8,7 +8,7 @@ clap = { version = "4.5.53", features = ["derive"] }
 ignore = "0.4.25"
 #gimli = "0.32.3"
 #gimli = { path = "./gimli" }
-gimli = { git = "https://github.com/oberien/gimli", rev = "239c71b0f5afade8af7cbf6496ba49a155ab0143" }
+gimli = { git = "https://github.com/oberien/gimli", rev = "3986f7e8fef17760550f3bd4083c2d43b4c74e15" }
 object = { version = "0.38.0", features = ["write_core"] }
 chumsky = "0.11.2"
 ariadne = "0.6.0"
