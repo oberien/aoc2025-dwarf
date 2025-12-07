@@ -7,126 +7,90 @@
 
 #type $Day3 {
     reader: $RodataReader,
-    first_index: $u64,
-    second_index: $u64,
+    num_digits: $u64,
+    num_digits_left: $u64,
     sum: $u64,
-    part12: $u64
 }
 
 #var day3_part1_sample {
     addr day3_sample
     addr day3_sample.len
     call rodata_reader_new
-    constu 1
+    constu 2
     call day3
     #get $Day3.sum
 }
-// takes ~4min
 #var day3_part1 {
     addr day3_input
     addr day3_input.len
     call rodata_reader_new
-    constu 1
+    constu 2
     call day3
     #get $Day3.sum
 }
-#var day3_part3_sample {
+#var day3_part2_sample {
     addr day3_sample
     addr day3_sample.len
     call rodata_reader_new
-    constu 2
+    constu 12
     call day3
     #get $Day3.sum
 }
-// takes ~6min
-#var day3_part3 {
+#var day3_part2 {
     addr day3_input
     addr day3_input.len
     call rodata_reader_new
-    constu 2
+    constu 12
     call day3
     #get $Day3.sum
 }
 
 // Stack before:
-//   $RodataReader, part12
+//   $RodataReader, num_digits
 #proc day3 {
+    dup
     #create $Day3 {
         reader: $RodataReader {
             address: 0,
             end_address: 0,
         },
-        first_index: 0,
-        second_index: 0,
+        num_digits: 0,
+        num_digits_left: 0,
         sum: 0,
-        part12: 0,
     }
     swap
-    #set $Day3.part12
+    #set $Day3.num_digits
+    swap
+    #set $Day3.num_digits_left
     swap
     #set $Day3.reader // -> $Day3
 
     #while (dup, #get $Day3.reader, call rodata_reader_is_eof) != (constu 1) {
         // get line
-        call rodata_reader_read_line
+        call rodata_reader_read_line // -> $Day3, $RodataReader, $String
         rot
         #set $Day3.reader // -> $String, $Day3
-
-        // get index of first highest number (skip last digit as we need one digit behind)
-        pick 1
-        dup // -> $String, $Day3, $String, $String
-        #set $String.len -= 1
-        call bytearray_max // -> $String, $Day3, $String, max
-        call bytearray_index_of // -> $String, $Day3, first_index
+        // reset num_digits_left
         dup
-        rot // -> $String, first_index, $Day3, first_index
-        #set $Day3.first_index
+        #get $Day3.num_digits
+        #set $Day3.num_digits_left
+        swap // -> $Day3, $String
 
-        // slice from behind first_index
-        swap // -> $String, $Day3, first_index
-        constu 1
-        plus // -> $String, $Day3, first_index+1
-        dup
-        rot // -> $String, first_index+1, $Day3, first_index+1
-        pick 3
-        #get $String.len // -> $String, first_index+1, $Day3, first_index+1, len
-        pick 4
-        rot // -> $String, first_index+1, $Day3, $String, first_index+1, len
-        call string_slice // -> $String, first_index+1, $Day3, slice
+        #while (pick 1, #get $Day3.num_digits_left) > (constu 0) {
+            pick 1
+            #get $Day3.num_digits_left // -> $Day3, $String, num_digits_left
+            call day3_single_step // -> $Day3, $String(left), scaled_number
+            pick 2
+            #get $Day3.sum
+            plus // -> $Day3, $String, sum
+            swap
+            rot // -> $String, $Day3, sum
+            #set $Day3.sum
 
-        // get index of second highest number (can include last digit this time)
-        dup
-        call bytearray_max // -> $String, first_index+1, $Day3, slice, max
-        call bytearray_index_of // -> $String, first_index+1, $Day3, second_index
-        // add first_index + 1 to second_index to get the actual second index
-        swap
-        rot // -> $String, $Day3, first_index+1, second_index
-        plus // -> $String, $Day3, second_index
-        #set $Day3.second_index // -> $String, $Day3
-
-        // get and combine both numbers
-        pick 1
-        pick 1
-        #get $Day3.first_index // -> $String, $Day3, $String, index
-        #getindex $String.data
-        constu 0x30
-        minus
-        constu 10
-        mul // -> $String, $Day3, first
-        pick 2
-        pick 2
-        #get $Day3.second_index
-        #getindex $String.data
-        constu 0x30
-        minus // -> $String, $Day3, first, second
-        plus // -> $String, $Day3, number
-        // add to sum
-        pick 1
-        #get $Day3.sum
-        plus
-        #set $Day3.sum // -> $String, $Day3
-        swap
-        drop // -> $Day3
+            #set $Day3.num_digits_left -= 1
+            swap // -> $Day3, $String
+        }
+        drop
     }
     drop
 }
@@ -157,4 +121,28 @@
     pick 3 // -> $String, num_digits_left, max, max, $String
     swap
     call bytearray_index_of // -> $String, num_digits_left, max, index
+
+    // get the number from the char
+    swap // -> $String, num_digits_left, index, max
+    constu 0x30
+    minus
+    // shift the digit to the correct position / scale it
+    constu 10 // -> $String, num_digits_left, index, max, 10
+    pick 3
+    constu 1
+    minus
+    call pow // -> $String, num_digits_left, index, max, multiplier
+    mul // -> $String, num_digits_left, index, scaled_max
+    rot
+    rot
+    drop // -> $String, index, scaled_max
+
+    // reduce the string to its rest after the index
+    rot // -> scaled_max, $String, index
+    constu 1
+    plus
+    pick 1
+    #get $String.len // -> scaled_max, $String, index+1, len
+    call string_slice
+    swap
 }
