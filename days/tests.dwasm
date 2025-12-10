@@ -18,6 +18,8 @@
     #debug 8
     call test_pow
     #debug 9
+    call test_rodata_reader_2d
+    #debug 10
     constu 1
 }
 
@@ -395,5 +397,71 @@
         constu 90863478940320987
         call panic
     }
+    drop
+}
+
+#rodata test_rodata_reader_2d_data1 {
+    #u8 'a', 'b', 'c', '\n', 'd', 'e', 'f', '\n'
+}
+#rodata test_rodata_reader_2d_data2 {
+    #u8 'a', 'b', 'c', '\n', 'd', 'e', 'f'
+}
+#proc test_rodata_reader_2d {
+    addr test_rodata_reader_2d_data1
+    addr test_rodata_reader_2d_data1.len
+    call test_rodata_reader_2d_internal
+    addr test_rodata_reader_2d_data2
+    addr test_rodata_reader_2d_data2.len
+    call test_rodata_reader_2d_internal
+}
+#proc test_rodata_reader_2d_internal {
+    call rodata_reader_2d_new
+
+    dup
+    #get $RodataReader2D.width
+    #if (dup) != (constu 3) {
+        constu 8905492378490
+        call panic
+    }
+    drop
+
+    dup
+    #get $RodataReader2D.height
+    #if (dup) != (constu 2) {
+        constu 92374279
+        call panic
+    }
+    drop
+
+    constu 0
+    constu 0
+    constu 'X'
+    call rodata_reader_2d_get_default
+    #if (dup) != (constu 'a') {
+        constu 89704302890
+        call panic
+    }
+    drop
+
+    constu 1
+    constu 1
+    constu 'X'
+    call rodata_reader_2d_get_default
+    #if (dup) != (constu 'e') {
+        constu 92087345479
+        call panic
+    }
+    drop
+
+    constu 2
+    constu 2
+    constu 'X'
+    call rodata_reader_2d_get_default
+    #if (dup) != (constu 'X') {
+        constu 734652827346578384
+        call panic
+    }
+    drop
+
     drop
 }

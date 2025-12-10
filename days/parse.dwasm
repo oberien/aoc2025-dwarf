@@ -3,6 +3,12 @@
     end_address: $u64,
 }
 
+// Expects newline-character-separated lines of byte-data
+#type $RodataReader2D {
+    address: $u64,
+    width: $u64,
+    height: $u64,
+}
 
 #type $ParseNumber {
     number: $u64,
@@ -144,4 +150,127 @@
     rot // -> $RodataReader, index, $String
     swap // -> $RodataReader, $String, index
     #set $String.len // -> $RodataReader, $String
+}
+
+// Create a new $RodataReader2D
+// Stack before:
+//     addr, addr_of_len
+// Stack after:
+//     $RodataReader2D
+#proc rodata_reader_2d_new {
+    #create $RodataReader2D {
+        address: 0,
+        width: 0xffff_ffff_ffff_ffff,
+        height: 0,
+    } // -> addr, addr_of_len, $RodataReader2D
+    pick 2
+    #set $RodataReader2D.address
+    rot // -> $RodataReader2D, addr, addr_of_len
+    call rodata_reader_new // -> $RodataReader2D, $RodataReader
+
+    constu 0
+    swap // -> $RodataReader2D, width, $RodataReader
+
+    #while (call rodata_reader_is_eof) != (constu 1) {
+        call rodata_reader_read_char
+        #if () != (constu '\n') {
+            swap
+            constu 1
+            plus
+            swap
+        } #else {
+            #if (pick 2, #get $RodataReader2D.width) == (consts -1) {
+                // we haven't stored a width yet -> set it
+                rot
+                #set $RodataReader2D.width // -> $RodataReader, $RodataReader2D
+                constu 0
+                rot
+                rot // -> $RodataReader2D, width, $RodataReader
+            } #else #if (pick 2, #get $RodataReader2D.width) == (pick 2) {
+                // width is same as all previous rows -> reset width to 0
+                rot
+                drop
+                constu 0
+                rot
+                rot
+            } #else #if (pick 1) == (constu 0) {
+                // line is empty -> ignore -> reset width to 0; continue
+                rot
+                drop
+                constu 0
+                rot
+                rot
+                skip .continue
+            } #else {
+                // width of current line differs from previous lines -> panic
+                drop
+                swap // -> current_width, $RodataReader2D
+                dup
+                #get $RodataReader2D.width
+                swap
+                #get $RodataReader2D.height
+                constu 89024987344987
+                // -> current_width, previous_width, current_height
+                call panic
+            }
+            // increase height
+            rot
+            rot
+            #set $RodataReader2D.height += 1
+            rot
+        }
+        .continue:
+    }
+    // -> $RodataReader2D, width, $RodataReader
+    // check last line
+    #if (pick 2, #get $RodataReader2D.width) == (pick 2) {
+        // width is same as all previous rows -> increase height
+        drop
+        drop
+        #set $RodataReader2D.height += 1
+    } #else #if (pick 1) == (constu 0) {
+        // line is empty -> ignore
+        drop
+        drop
+    } #else {
+        constu 2034927802904387
+        drop
+        swap
+        dup
+        #get $RodataReader2D.width
+        swap
+        #get $RodataReader2D.height
+        // -> current_width, previous_width, current_height
+        call panic
+    }
+}
+
+// Returns a single byte at the given position, or the default value if `x`
+// or `y` is out of bounds
+// Stack before:
+//     $RodataReader2D, x, y, default
+// Stack after:
+//     $RodataReader2D, value
+#proc rodata_reader_2d_get_default {
+    #if (pick 3, #get $RodataReader2D.width) <= (pick 3) {
+        rot
+        drop
+        drop
+    } #else #if (pick 3, #get $RodataReader2D.height) <= (pick 2) {
+        rot
+        drop
+        drop
+    } #else {
+        drop // -> $RodataReader2D, x, y
+        pick 2
+        #get $RodataReader2D.width
+        constu 1
+        plus // add newline character to width
+        mul // -> $RodataReader2D, x, width*y
+        plus // -> $RodataReader2D, x + width*y
+        pick 1
+        #get $RodataReader2D.address
+        plus // -> $RodataReader2D, addr + x + width*y
+        deref_size 1
+    }
 }
