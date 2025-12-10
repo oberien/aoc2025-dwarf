@@ -1,0 +1,127 @@
+#rodata day4_sample {
+    #include_file "days/inputs/day04_sample"
+}
+#rodata day4_input {
+    #include_file "days/inputs/day04_input"
+}
+
+#type $Day4 {
+    reader: $RodataReader2D,
+    x: $u64,
+    y: $u64,
+    sum: $u64,
+}
+
+#var day4_part1_sample {
+    addr day4_sample
+    addr day4_sample.len
+    call rodata_reader_2d_new
+    call day4
+    #get $Day4.sum
+}
+#var day4_part1 {
+    addr day4_input
+    addr day4_input.len
+    call rodata_reader_2d_new
+    call day4
+    #get $Day4.sum
+}
+
+// Stack before:
+//   $RodataReader2D
+#proc day4 {
+    #create $Day4 {
+        reader: $RodataReader2D {
+            address: 0,
+            width: 0,
+            height: 0,
+        },
+        x: 0,
+        y: 0,
+        sum: 0,
+    }
+    swap
+    #set $Day4.reader // -> $Day4
+
+    #while (dup, #get $Day4.y) < (pick 1, #get $Day4.reader.height) {
+        #while (dup, #get $Day4.x) < (pick 1, #get $Day4.reader.width) {
+            // check if current x,y is a toilet paper roll
+            dup
+            #get $Day4.reader
+            pick 1
+            #get $Day4.x
+            pick 2
+            #get $Day4.y // -> $Day4, $RodataReader2D, x, y
+            call rodata_reader_2d_get // -> $Day4, $RodataReader2D, value
+            swap
+            drop // -> $Day4, value
+            #if () == (constu '@') {
+                constu 0 // -> $Day4, count
+                consts -1
+                consts -1 // -> $Day4, count, dx, dy
+                call day4_get_offset
+                consts 0
+                consts -1 // -> $Day4, count, dx, dy
+                call day4_get_offset
+                consts 1
+                consts -1 // -> $Day4, count, dx, dy
+                call day4_get_offset
+                consts -1
+                consts 0 // -> $Day4, count, dx, dy
+                call day4_get_offset
+                consts 1
+                consts 0 // -> $Day4, count, dx, dy
+                call day4_get_offset
+                consts -1
+                consts 1 // -> $Day4, count, dx, dy
+                call day4_get_offset
+                consts 0
+                consts 1 // -> $Day4, count, dx, dy
+                call day4_get_offset
+                consts 1
+                consts 1 // -> $Day4, count, dx, dy
+                call day4_get_offset
+
+                // -> $Day4, count
+
+                #if () < (constu 4) {
+                    #set $Day4.sum += 1
+                }
+            }
+
+            #set $Day4.x += 1
+        }
+        #set $Day4.x = 0
+        #set $Day4.y += 1
+    }
+}
+
+// Checks if there is toilet paper at ($Day4.x + dx, $Day4.y + dy) and increases
+// the count accordingly
+// Stack before:
+//     $Day4, count, dx, dy
+// Stack after:
+//     $Day4, new_count
+#proc day4_get_offset {
+    swap // -> $Day4, count, dy, dx
+    pick 3
+    #get $Day4.x
+    plus // -> $Day4, count, dy, x
+    swap // -> $Day4, count, x, dy
+    pick 3
+    #get $Day4.y
+    plus // -> $Day4, count, x, y
+
+    pick 3
+    #get $Day4.reader
+    rot // -> $Day4, count, $RodataReader2D, x, y
+    constu '.' // -> $Day4, count, $RodataReader2D, x, y, default
+    call rodata_reader_2d_get_default // -> $Day4, count, $RodataReader2D, char
+    swap
+    drop // -> $Day4, count, char
+
+    #if () == (constu '@') {
+        constu 1
+        plus
+    }
+}

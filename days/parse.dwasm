@@ -256,7 +256,15 @@
         rot
         drop
         drop
+    } #else #if (pick 2) < (constu 0) {
+        rot
+        drop
+        drop
     } #else #if (pick 3, #get $RodataReader2D.height) <= (pick 2) {
+        rot
+        drop
+        drop
+    } #else #if (pick 1) < (constu 0) {
         rot
         drop
         drop
@@ -272,5 +280,20 @@
         #get $RodataReader2D.address
         plus // -> $RodataReader2D, addr + x + width*y
         deref_size 1
+    }
+}
+
+// Returns a single byte at the given position, or the default value if `x`
+// or `y` is out of bounds
+// Stack before:
+//     $RodataReader2D, x, y
+// Stack after:
+//     $RodataReader2D, value
+#proc rodata_reader_2d_get {
+    constu 0xdead
+    call rodata_reader_2d_get_default
+    #if (dup) == (constu 0xdead) {
+        constu 9207348795298
+        call panic
     }
 }

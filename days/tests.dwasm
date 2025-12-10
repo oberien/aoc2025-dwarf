@@ -454,6 +454,16 @@
     drop
 
     constu 2
+    constu 1
+    constu 'X'
+    call rodata_reader_2d_get_default
+    #if (dup) != (constu 'f') {
+        constu 23409782043872
+        call panic
+    }
+    drop
+
+    constu 2
     constu 2
     constu 'X'
     call rodata_reader_2d_get_default
