@@ -92,16 +92,16 @@
     ge
 }
 
-// Read a single char.
+// Read a single char, return -1 if eof
 // Panics if the reader reached the end.
 // Stack before:
 //     $RodataReader
 // Stack after:
 //     $RodataReader, char
-#proc rodata_reader_read_char {
+#proc rodata_reader_try_read_char {
     #if (call rodata_reader_is_eof) == (constu 1) {
-        constu 910823749081723
-        call panic
+        consts -1
+        skip .end
     }
 
     dup
@@ -110,6 +110,19 @@
     swap
     #set $RodataReader.address += 1
     swap
+.end:
+}
+// Read a single char, panicking on eof.
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, char
+#proc rodata_reader_read_char {
+    call rodata_reader_try_read_char
+    #if (dup) == (consts -1) {
+        constu 910823749081723
+        call panic
+    }
 }
 
 // Read a line into a $String, excluding the newline (but consuming it).
