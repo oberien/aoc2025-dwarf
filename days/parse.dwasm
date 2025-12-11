@@ -165,6 +165,106 @@
     #set $String.len // -> $RodataReader, $String
 }
 
+// Skip everything until including a double-newline "\n\n" or eof.
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader
+#proc rodata_reader_skip_to_double_newline {
+    consts 0
+    consts 0 // -> $RodataReader, last, current
+    #while (dup) != (constu '\n') or (pick 2) != (constu '\n') {
+        swap
+        drop // -> $RodataReader, current
+        swap
+        call rodata_reader_try_read_char // -> current, $RodataReader, new
+        #if (dup) == (consts -1) {
+            skip .end
+        }
+        swap
+        rot // -> $RodataReader, current, new
+    }
+.end:
+    drop
+    drop
+}
+
+// Try to read a number, returning -1 if the reader doesn't start with a valid digit
+// (doesn't consume any chars in the error case).
+// Panicks if called on eof.
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, number
+#proc rodata_reader_try_read_number {
+    call rodata_reader_read_char // -> $RodataReader, char
+    #if (dup) < (constu '0') {
+        skip .error
+    }
+    #if (dup) > (constu '9') {
+        skip .error
+    }
+    drop
+    // unconsume char
+    #set $RodataReader.address -= 1
+
+
+    // we start with a digit -> parse
+    constu 0 // -> $RodataReader, value
+    #while (swap, call rodata_reader_try_read_char, dup) >= (constu '0') and (pick 1) <= (constu '9') {
+        // -> value, $RodataReader, char
+        constu '0'
+        minus
+        rot
+        rot // -> $RodataReader, char, value
+        constu 10
+        mul
+        plus // -> $RodataReader, value
+    }
+    // -> value, $RodataReader, char
+    #if (dup) == (consts -1) {
+        // un-unconsume last char as it is a digit
+        swap
+        #set $RodataReader.address += 1
+        swap
+    }
+    drop
+    swap
+    skip .end
+.error:
+     // -> $RodataReader, char
+     drop
+     consts -1
+.end:
+    // unconsume the last non-digit char
+    swap
+    #set $RodataReader.address -= 1
+    swap
+}
+
+// Consumes chars until it finds a number and returns the number, or -1 on eof.
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, number
+#proc rodata_reader_next_number {
+.loop:
+    #if (call rodata_reader_is_eof) == (constu 1) {
+        consts -1
+        skip .end
+    }
+    call rodata_reader_try_read_number
+    #if (dup) != (consts -1) {
+        skip .end
+    }
+    drop
+    call rodata_reader_read_char
+    drop
+
+    skip .loop
+.end:
+}
+
 // Create a new $RodataReader2D
 // Stack before:
 //     addr, addr_of_len
