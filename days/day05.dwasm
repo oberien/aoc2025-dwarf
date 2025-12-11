@@ -1,0 +1,113 @@
+#rodata day5_sample {
+    #include_file "days/inputs/day05_sample"
+}
+#rodata day5_input {
+    #include_file "days/inputs/day05_input"
+}
+
+#type $Day5 {
+        range_reader_default: $RodataReader,
+        range_reader: $RodataReader,
+        number_reader: $RodataReader,
+        sum: $u64,
+}
+
+#var day5_part1_sample {
+    addr day5_sample
+    addr day5_sample.len
+    call rodata_reader_new
+    call day5
+    #get $Day5.sum
+}
+// takes 15s
+#var day5_part1 {
+    addr day5_input
+    addr day5_input.len
+    call rodata_reader_new
+    call day5
+    #get $Day5.sum
+}
+
+// Stack before:
+//   $RodataReader
+#proc day5 {
+    #create $Day5 {
+        range_reader_default: $RodataReader {
+            address: 0,
+            end_address: 0,
+        },
+        range_reader: $RodataReader {
+            address: 0,
+            end_address: 0,
+        },
+        number_reader: $RodataReader {
+            address: 0,
+            end_address: 0,
+        },
+        sum: 0,
+    }
+    swap
+    dup
+    rot // -> $RodataReader, $Day5, $RodataReader
+    call rodata_reader_skip_to_double_newline // -> $RodataReader, $Day5, number_reader
+    #set $Day5.number_reader
+    dup
+    rot // -> $Day5, $RodataReader, $Day5
+    #get $Day5.number_reader.address
+    constu 2
+    minus
+    #set $RodataReader.end_address
+    dup
+    rot // -> range_reader, $Day5, range_reader
+    #set $Day5.range_reader
+    swap
+    #set $Day5.range_reader_default
+
+    // -> $Day5
+    #while (dup, #get $Day5.number_reader, call rodata_reader_next_number, dup) != (consts -1) {
+        // -> $Day5, number_reader, number
+        rot // -> number, $Day5, number_reader
+        #set $Day5.number_reader
+        dup
+        #get $Day5.range_reader_default
+        #set $Day5.range_reader
+        swap // -> $Day5, number
+        #while (constu 0) == (constu 0) {
+            pick 1
+            #get $Day5.range_reader
+            call rodata_reader_next_number // -> $Day5, number, range_reader, range_from
+            #if (dup) == (consts -1) {
+                drop
+                drop
+                drop
+                skip .continue
+            }
+            swap
+            call rodata_reader_next_number // -> $Day5, number, range_from, range_reader, range_to
+            #if (dup) == (consts -1) {
+                constu 90874478903428
+                call panic
+            }
+            swap
+            rot // -> $Day5, number, range_reader, range_from, range_to
+            #if (pick 3) >= (pick 2) and (pick 4) <= (pick 2) {
+                drop
+                drop
+                swap
+                drop // -> $Day5, range_reader
+                drop // -> $Day5
+                #set $Day5.sum += 1
+                skip .continue
+            }
+            drop
+            drop
+            swap // -> $Day5, range_reader, number
+            rot // -> number, $Day5, range_reader
+            #set $Day5.range_reader // -> number, $Day5
+            swap // -> $Day5, number
+        }
+        .continue:
+    }
+    drop
+    drop
+}
