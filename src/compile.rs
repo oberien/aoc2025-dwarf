@@ -195,27 +195,14 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
         },
         Instruction::IfElse(ifs, els) => {
             let end_label = global_ctx.anonymous_label();
-            for (Condition { lhs, op, rhs }, then) in ifs {
+            for (condition, then) in ifs {
                 // a < b needs to be translated as
                 // compile(a)
                 // compile(b)
                 // ge ; OPPOSITE CONDITION
                 // bra .next_if_or_else_or_after
                 let next_label = global_ctx.anonymous_label();
-                for lhs in lhs {
-                    compile_instruction(expr, program, global_ctx, fn_ctx, lhs);
-                }
-                for rhs in rhs {
-                    compile_instruction(expr, program, global_ctx, fn_ctx, rhs);
-                }
-                match op {
-                    CondOp::Lt => expr.op(gimli::DW_OP_ge),
-                    CondOp::Le => expr.op(gimli::DW_OP_gt),
-                    CondOp::Eq => expr.op(gimli::DW_OP_ne),
-                    CondOp::Ge => expr.op(gimli::DW_OP_lt),
-                    CondOp::Gt => expr.op(gimli::DW_OP_le),
-                    CondOp::Ne => expr.op(gimli::DW_OP_eq),
-                }
+                compile_condition(expr, program, global_ctx, fn_ctx, condition);
                 compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Bra(&next_label));
                 for inst in then {
                     compile_instruction(expr, program, global_ctx, fn_ctx, inst);
@@ -230,7 +217,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             }
             compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&end_label));
         }
-        Instruction::While(Condition { lhs, op, rhs }, body) => {
+        Instruction::While(condition, body) => {
             let loop_label = global_ctx.anonymous_label();
             let end_label = global_ctx.anonymous_label();
             // a < b needs to be translated as
@@ -239,20 +226,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             // ge ; OPPOSITE CONDITION
             // bra .end
             compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Label(&loop_label));
-            for lhs in lhs {
-                compile_instruction(expr, program, global_ctx, fn_ctx, lhs);
-            }
-            for rhs in rhs {
-                compile_instruction(expr, program, global_ctx, fn_ctx, rhs);
-            }
-            match op {
-                CondOp::Lt => expr.op(gimli::DW_OP_ge),
-                CondOp::Le => expr.op(gimli::DW_OP_gt),
-                CondOp::Eq => expr.op(gimli::DW_OP_ne),
-                CondOp::Ge => expr.op(gimli::DW_OP_lt),
-                CondOp::Gt => expr.op(gimli::DW_OP_le),
-                CondOp::Ne => expr.op(gimli::DW_OP_eq),
-            }
+            compile_condition(expr, program, global_ctx, fn_ctx, condition);
             compile_instruction(expr, program, global_ctx, fn_ctx, Instruction::Bra(&end_label));
             for inst in body {
                 compile_instruction(expr, program, global_ctx, fn_ctx, inst);
@@ -394,6 +368,39 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
             expr.op_convert(None);
             expr.op_constu(primitive_mask(primitive));
             expr.op(gimli::DW_OP_and);
+        }
+    }
+}
+
+fn compile_condition<'a>(expr: &mut Expression, program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a>, fn_ctx: &mut FunctionContext, condition: Condition<'_>) {
+    match condition {
+        Condition::And(a, b) => {
+            compile_condition(expr, program, global_ctx, fn_ctx, *a);
+            compile_condition(expr, program, global_ctx, fn_ctx, *b);
+            // we need to negate the condition
+            expr.op(gimli::DW_OP_or)
+        }
+        Condition::Or(a, b) => {
+            compile_condition(expr, program, global_ctx, fn_ctx, *a);
+            compile_condition(expr, program, global_ctx, fn_ctx, *b);
+            // we need to negate the condition
+            expr.op(gimli::DW_OP_and)
+        }
+        Condition::Atom { lhs, op, rhs } => {
+            for lhs in lhs {
+                compile_instruction(expr, program, global_ctx, fn_ctx, lhs);
+            }
+            for rhs in rhs {
+                compile_instruction(expr, program, global_ctx, fn_ctx, rhs);
+            }
+            match op {
+                CondOp::Lt => expr.op(gimli::DW_OP_ge),
+                CondOp::Le => expr.op(gimli::DW_OP_gt),
+                CondOp::Eq => expr.op(gimli::DW_OP_ne),
+                CondOp::Ge => expr.op(gimli::DW_OP_lt),
+                CondOp::Gt => expr.op(gimli::DW_OP_le),
+                CondOp::Ne => expr.op(gimli::DW_OP_eq),
+            }
         }
     }
 }

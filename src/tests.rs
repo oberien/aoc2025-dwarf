@@ -494,7 +494,7 @@ fn test_while() {
             constu 0
             constu 0
             // -> sum, i
-            #while (dup) < (constu 10) {
+            #while (dup) < (constu 10) and (constu 5) > (constu 2) {
                 dup // -> sum, i, i
                 rot // -> i, sum, i
                 plus // -> i, sum

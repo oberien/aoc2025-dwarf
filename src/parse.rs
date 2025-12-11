@@ -176,10 +176,14 @@ pub enum CondOp {
 }
 
 #[derive(Debug, Clone)]
-pub struct Condition<'a> {
-    pub lhs: Vec<Instruction<'a>>,
-    pub op: CondOp,
-    pub rhs: Vec<Instruction<'a>>,
+pub enum Condition<'a> {
+    And(Box<Condition<'a>>, Box<Condition<'a>>),
+    Or(Box<Condition<'a>>, Box<Condition<'a>>),
+    Atom {
+        lhs: Vec<Instruction<'a>>,
+        op: CondOp,
+        rhs: Vec<Instruction<'a>>,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -285,16 +289,8 @@ impl Display for Instruction<'_> {
             Instruction::Debug(Some(num)) => write!(f, "#debug {num}"),
             Instruction::Debug(None) => write!(f, "#debug"),
             Instruction::IfElse(ifs, els) => {
-                for (i, (Condition { lhs, op, rhs }, then)) in ifs.iter().enumerate() {
-                    write!(f, "#if (")?;
-                    for lhs in lhs {
-                        write!(f, "{lhs}, ")?;
-                    }
-                    write!(f, ") {op} (")?;
-                    for rhs in rhs {
-                        write!(f, "{rhs}, ")?;
-                    }
-                    writeln!(f, ") {{")?;
+                for (i, (condition, then)) in ifs.iter().enumerate() {
+                    writeln!(f, "#if {condition} {{")?;
                     let mut indented = IndentWriter::new("    ", &mut *f);
                     for then in then {
                         writeln!(indented, "{then}")?;
@@ -316,16 +312,8 @@ impl Display for Instruction<'_> {
                 }
                 Ok(())
             },
-            Instruction::While(Condition { lhs, op, rhs }, body) => {
-                write!(f, "#while (")?;
-                for lhs in lhs {
-                    write!(f, "{lhs}, ")?;
-                }
-                write!(f, ") {op} (")?;
-                for rhs in rhs {
-                    write!(f, "{rhs}, ")?;
-                }
-                writeln!(f, ") {{")?;
+            Instruction::While(condition, body) => {
+                writeln!(f, "#while {condition} {{")?;
                 let mut indented = IndentWriter::new("    ", &mut *f);
                 for inst in body {
                     writeln!(indented, "{inst}")?;
@@ -360,6 +348,25 @@ impl Display for CondOp {
             CondOp::Ge => write!(f, ">="),
             CondOp::Gt => write!(f, ">"),
             CondOp::Ne => write!(f, "!="),
+        }
+    }
+}
+impl Display for Condition<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Condition::And(a, b) => write!(f, "{a} and {b}"),
+            Condition::Or(a, b) => write!(f, "{a} or {b}"),
+            Condition::Atom { lhs, op, rhs } => {
+                write!(f, "(")?;
+                for lhs in lhs {
+                    write!(f, "{lhs}, ")?;
+                }
+                write!(f, ") {op} (")?;
+                for rhs in rhs {
+                    write!(f, "{rhs}, ")?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }
@@ -578,18 +585,30 @@ fn cond_op<'a>() -> impl Parser<'a, CondOp> + Clone {
     ))
 }
 
-fn condition<'a>(instruction: impl Parser<'a, Instruction<'a>> + Clone) -> impl Parser<'a, Condition<'a>> + Clone {
-    let instructions = instruction
-        .padded_by(comment().padded().repeated()).padded()
-        .separated_by(just(',')).allow_trailing()
-        .collect::<Vec<_>>()
-        .delimited_by(just('('), just(')'));
+fn condition<'a>(instruction: impl Parser<'a, Instruction<'a>> + Clone + 'a) -> impl Parser<'a, Condition<'a>> + Clone {
+    recursive(|condition| {
+        let instructions = instruction
+            .padded_by(comment().padded().repeated()).padded()
+            .separated_by(just(',')).allow_trailing()
+            .collect::<Vec<_>>()
+            .delimited_by(just('('), just(')'));
+        let atom = instructions.clone().padded().padded_by(comment().repeated().padded())
+            .then(cond_op().padded()).padded().padded_by(comment().repeated().padded())
+            .then(instructions)
+            .padded().padded_by(comment().repeated().padded())
+            .map(|((lhs, op), rhs)| Condition::Atom { lhs, op, rhs });
 
-    instructions.clone().padded().padded_by(comment().repeated().padded())
-        .then(cond_op().padded()).padded().padded_by(comment().repeated().padded())
-        .then(instructions)
-        .padded().padded_by(comment().repeated().padded())
-        .map(|((lhs, op), rhs)| Condition { lhs, op, rhs })
+        let and = atom.clone().padded()
+            .then_ignore(just("and"))
+            .then(condition.clone())
+            .map(|(a, b)| Condition::And(Box::new(a), Box::new(b)));
+        let or = atom.clone().padded()
+            .then_ignore(just("or"))
+            .then(condition.clone())
+            .map(|(a, b)| Condition::Or(Box::new(a), Box::new(b)));
+
+        choice((and, or, atom))
+    })
 }
 
 fn set_assign<'a>() -> impl Parser<'a, SetAssign> + Clone {
