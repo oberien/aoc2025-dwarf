@@ -703,6 +703,18 @@
         call panic
     }
 
+    // test go_to_last_line: check if a fresh reader gone to the last line equals
+    // our test-reader that is currently at the beginning of the last line
+    addr rodata_reader_go_to_next_line_data
+    addr rodata_reader_go_to_next_line_data.len
+    call rodata_reader_new
+    call rodata_reader_go_to_last_line
+    #if (dup) != (pick 2) {
+        constu 3497597842973498
+        call panic
+    }
+    drop
+
     call rodata_reader_go_to_next_line
     #if (dup) != (consts -1) {
         constu 854477388783476

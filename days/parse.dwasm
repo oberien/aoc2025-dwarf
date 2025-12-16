@@ -330,6 +330,19 @@
 .end:
 }
 
+// Progresses the reader to the start of the last line
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader
+#proc rodata_reader_go_to_last_line {
+    #while (dup, call rodata_reader_go_to_next_line) != (consts -1) {
+        swap
+        drop
+    }
+    drop
+}
+
 // Create a new $RodataReader2D
 // Stack before:
 //     addr, addr_of_len
