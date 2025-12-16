@@ -26,6 +26,8 @@
     #debug 12
     call test_rodata_reader_next_non_whitespace_char
     #debug 13
+    call test_rodata_reader_go_to_char
+    #debug 14
     constu 1
 }
 
@@ -617,6 +619,40 @@
     call rodata_reader_next_non_whitespace_char
     #if (dup) != (consts -1) {
         constu 3845748747843
+        call panic
+    }
+    drop
+
+    drop
+}
+#rodata rodata_reader_go_to_char_data {
+    #u8 'a', 'b', '\n', 'c'
+}
+#proc test_rodata_reader_go_to_char {
+    addr rodata_reader_go_to_char_data
+    addr rodata_reader_go_to_char_data.len
+    call rodata_reader_new
+
+    constu 'a'
+    call rodata_reader_go_to_char
+    #if (dup) != (constu 0) {
+        constu 789342080098
+        call panic
+    }
+    drop
+
+    constu '\n'
+    call rodata_reader_go_to_char
+    #if (dup) != (constu 0) {
+        constu 445794897547894
+        call panic
+    }
+    drop
+
+    constu 'd'
+    call rodata_reader_go_to_char
+    #if (dup) != (consts -1) {
+        constu 47853978349
         call panic
     }
     drop

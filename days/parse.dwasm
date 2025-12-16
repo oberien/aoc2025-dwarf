@@ -280,6 +280,37 @@
 .end:
 }
 
+// Progresses the reader to just before the occurrence of the provided char, returning
+// -1 if eof was reached (0 otherwise)
+// Stack before:
+//     $RodataReader, char
+// Stack after:
+//     $RodataReader, result
+#proc rodata_reader_go_to_char {
+    swap // -> needle, $RodataReader
+.loop:
+    call rodata_reader_try_read_char // -> needle, $RodataReader, char
+    #if (dup) == (consts -1) {
+        drop
+        swap
+        drop
+        consts -1
+        skip .end
+    }
+    #if (dup) == (pick 3) {
+        // found the needle; skip back to before it
+        drop
+        swap
+        drop
+        #set $RodataReader.address -= 1
+        constu 0
+        skip .end
+    }
+    drop
+
+    skip .loop
+.end:
+}
 // Create a new $RodataReader2D
 // Stack before:
 //     addr, addr_of_len
