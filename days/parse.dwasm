@@ -311,6 +311,25 @@
     skip .loop
 .end:
 }
+
+// Progresses the reader to the start of the next line, returning
+// -1 if eof was reached (0 otherwise)
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, result
+#proc rodata_reader_go_to_next_line {
+    constu '\n'
+    call rodata_reader_go_to_char
+    #if (dup) == (consts -1) {
+        skip .end
+    }
+    drop
+    #set $RodataReader.address += 1
+    constu 0
+.end:
+}
+
 // Create a new $RodataReader2D
 // Stack before:
 //     addr, addr_of_len
