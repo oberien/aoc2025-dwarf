@@ -384,14 +384,6 @@
                 constu 0
                 rot
                 rot
-            } #else #if (pick 1) == (constu 0) {
-                // line is empty -> ignore -> reset width to 0; continue
-                rot
-                drop
-                constu 0
-                rot
-                rot
-                skip .continue
             } #else {
                 // width of current line differs from previous lines -> panic
                 drop
