@@ -24,6 +24,8 @@
     #debug 11
     call test_rodata_reader_next_number
     #debug 12
+    call test_rodata_reader_next_non_whitespace_char
+    #debug 13
     constu 1
 }
 
@@ -552,6 +554,8 @@
         call panic
     }
     drop
+
+    drop
 }
 #proc test_rodata_reader_next_number {
     addr test_rodata_reader_try_read_number_data
@@ -577,5 +581,45 @@
         constu 234978520877
         call panic
     }
+    drop
+
+    drop
+}
+#rodata rodata_reader_next_non_whitespace_char_data {
+    #u8 'a', ' ', '\t', '\n', '\r', 'b', 'c'
+}
+#proc test_rodata_reader_next_non_whitespace_char {
+    addr rodata_reader_next_non_whitespace_char_data
+    addr rodata_reader_next_non_whitespace_char_data.len
+    call rodata_reader_new
+
+    call rodata_reader_next_non_whitespace_char
+    #if (dup) != (constu 'a') {
+        constu 142790842897
+        call panic
+    }
+    drop
+
+    call rodata_reader_next_non_whitespace_char
+    #if (dup) != (constu 'b') {
+        constu 249873402987278
+        call panic
+    }
+    drop
+
+    call rodata_reader_next_non_whitespace_char
+    #if (dup) != (constu 'c') {
+        constu 323780942387023
+        call panic
+    }
+    drop
+
+    call rodata_reader_next_non_whitespace_char
+    #if (dup) != (consts -1) {
+        constu 3845748747843
+        call panic
+    }
+    drop
+
     drop
 }
