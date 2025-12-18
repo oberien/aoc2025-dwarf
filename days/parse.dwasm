@@ -428,6 +428,66 @@
     }
 }
 
+// Return a reader starting at the given x and y
+// If x is larger than the width, the reader will be at the end of line y.
+// If y is larger than the height, the reader will be at the end of the input.
+// Stack before:
+//     $RodataReader2D, x, y
+// Stack after:
+//     $RodataReader2D, $RodataReader
+#proc rodata_reader_2d_get_reader_at {
+    #if (pick 2, #get $RodataReader2D.width) <= (pick 2) {
+        swap // -> $RodataReader2D, y, x
+        drop // -> $RodataReader2D, y
+        pick 1
+        #get $RodataReader2D.width
+        swap // -> $RodataReader2D, width, y
+    } #else #if (pick 1) < (constu 0) {
+        constu 72980498240389
+        call panic
+    }
+    #if (pick 2, #get $RodataReader2D.height) <= (pick 1) {
+        drop // -> $RodataReader2D, x
+        drop // -> $RodataReader2D
+        constu 0 // -> $RodataReader2D, x=0
+        pick 1
+        #get $RodataReader2D.height // -> $RodataReader2D, x=0, height
+    } #else #if (dup) < (constu 0) {
+        constu 439287427894327
+        call panic
+    }
+
+    // -> $RodataReader2D, x, y
+    pick 2
+    #get $RodataReader2D.width
+    constu 1
+    plus // add newline character to width
+    mul // -> $RodataReader2D, x, width*y
+    plus // -> $RodataReader2D, x + width*y
+    pick 1
+    #get $RodataReader2D.address
+    plus // -> $RodataReader2D, addr + x + width*y
+    // get end_address
+    pick 1
+    #get $RodataReader2D.height // -> $RodataReader2D, addr, height
+    pick 2
+    #get $RodataReader2D.width // -> $RodataReader2D, addr, height, width
+    constu 1
+    plus
+    mul // -> $RodataReader2D, addr, length
+    pick 2
+    #get $RodataReader2D.address
+    plus // -> $RodataReader2D, addr, end_addr
+    #create $RodataReader {
+        address: 0,
+        end_address: 0,
+    }
+    swap
+    #set $RodataReader.end_address
+    swap
+    #set $RodataReader.address
+}
+
 // Returns a single byte at the given position, or the default value if `x`
 // or `y` is out of bounds
 // Stack before:
@@ -435,34 +495,21 @@
 // Stack after:
 //     $RodataReader2D, value
 #proc rodata_reader_2d_get_default {
-    #if (pick 3, #get $RodataReader2D.width) <= (pick 3) {
-        rot
+    rot // -> $RodataReader2D, default, x, y
+    pick 3
+    rot // -> $RodataReader2D, default, $RodataReader2D, x, y
+    call rodata_reader_2d_get_reader_at // -> $RodataReader2D, default, $RodataReader2D, $RodataReader
+    call rodata_reader_try_read_char // -> $RodataReader2D, default, $RodataReader2D, $RodataReader, char
+    #if (dup) == (consts -1) {
         drop
-        drop
-    } #else #if (pick 2) < (constu 0) {
-        rot
-        drop
-        drop
-    } #else #if (pick 3, #get $RodataReader2D.height) <= (pick 2) {
-        rot
-        drop
-        drop
-    } #else #if (pick 1) < (constu 0) {
-        rot
         drop
         drop
     } #else {
-        drop // -> $RodataReader2D, x, y
-        pick 2
-        #get $RodataReader2D.width
-        constu 1
-        plus // add newline character to width
-        mul // -> $RodataReader2D, x, width*y
-        plus // -> $RodataReader2D, x + width*y
-        pick 1
-        #get $RodataReader2D.address
-        plus // -> $RodataReader2D, addr + x + width*y
-        deref_size 1
+        rot
+        drop
+        drop // -> $RodataReader2D, default, char
+        swap
+        drop
     }
 }
 
