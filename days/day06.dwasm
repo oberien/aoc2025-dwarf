@@ -12,17 +12,39 @@
         current_op: $u8,
         current_num: $u64,
         sum: $u64,
+        part12: $u8,
+}
+
+#type $Day6xy {
+    x: $u64,
+    y: $u64,
 }
 
 #var day6_part1_sample {
     addr day6_sample
     addr day6_sample.len
+    constu 1
     call day6
     #get $Day6.sum
 }
 #var day6_part1 {
     addr day6_input
     addr day6_input.len
+    constu 1
+    call day6
+    #get $Day6.sum
+}
+#var day6_part2_sample {
+    addr day6_sample
+    addr day6_sample.len
+    constu 2
+    call day6
+    #get $Day6.sum
+}
+#var day6_part2 {
+    addr day6_input
+    addr day6_input.len
+    constu 2
     call day6
     #get $Day6.sum
 }
@@ -33,13 +55,8 @@
 // numbers at that x for each line except the last.
 //
 // Stack before:
-//   input_addr, input_len_addr
+//   input_addr, input_len_addr, part12
 #proc day6 {
-    pick 1
-    pick 1
-    call rodata_reader_new // -> input_addr, input_len_addr, $RodataReader
-    rot
-    call rodata_reader_2d_new // -> $RodataReader, $RodataReader2D
     #create $Day6 {
         reader: $RodataReader2D {
             address: 0,
@@ -54,17 +71,24 @@
         current_op: 0,
         current_num: 0,
         sum: 0,
-    }
+        part12: 0,
+    } // -> input_addr, input_len_addr, part12, $Day6
     swap
-    #set $Day6.reader
-    swap // -> $Day6, $RodataReader
+    #set $Day6.part12 // -> input_addr, input_len_addr, $Day6
+
+    pick 2
+    pick 2
+    call rodata_reader_new // -> input_addr, input_len_addr, $Day6, $RodataReader
     call rodata_reader_go_to_last_line
     dup
-    rot // -> $RodataReader, $Day6, $RodataReader
+    rot // -> input_addr, input_len_addr, $RodataReader, $Day6, $RodataReader
     #get $RodataReader.address
     #set $Day6.last_line_start
     swap
-    #set $Day6.last_line_reader
+    #set $Day6.last_line_reader // -> input_addr, input_len_addr, $Day6
+    rot // -> $Day6, input_addr, input_len_addr
+    call rodata_reader_2d_new // -> $Day6, $RodataReader2D
+    #set $Day6.reader
 
     // -> $Day6
 
@@ -89,38 +113,37 @@
         }
         // -> $Day6
 
+        #create $Day6xy { x: 0, y: 0 }
 
         // get offset of the op in the last line
-        dup
+        pick 1
         #get $Day6.last_line_reader.address
         // subtract the current_op character
         constu 1
         minus // -> $Day6, address
-        pick 1
+        pick 2
         #get $Day6.last_line_start
-        minus // -> $Day6, x
+        minus
+        #set $Day6xy.x // -> $Day6, $Day6xy
 
-        constu 0 // -> $Day6, x, y
-
-        // until we reach the second-last line
-        #while (dup) < (pick 3, #get $Day6.reader.height, constu 1, minus) {
-            // -> $Day6, x, y
-            rot
-            rot // -> x, y, $Day6
-            pick 2
-            pick 2 // -> x, y, $Day6, x, y
-            pick 2
-            #get $Day6.reader
-            rot
-            call rodata_reader_2d_get_reader_at
-            call rodata_reader_next_number // -> x, y, $Day6, $RodataReader2D, $RodataReader, number
-            rot
-            drop
-            drop // -> x, y, $Day6, number
+        .loop:
             pick 1
-            #get $Day6.current_num // -> x, y, $Day6, number, current_num
+            #get $Day6.part12
+            #if () == (constu 1) {
+                call day6_next_number_part1
+            } #else {
+                call day6_next_number_part2
+            }
+            // -> $Day6, $Day6xy, number
+            #if (dup) == (consts -1) {
+                drop
+                skip .endloop
+            }
+
             pick 2
-            #get $Day6.current_op // -> x, y, $Day6, number, current_num, op
+            #get $Day6.current_num // -> $Day6, $Day6xy, number, current_num
+            pick 3
+            #get $Day6.current_op // -> $Day6, $Day6xy, number, current_num, op
             #if (dup) == (constu '+') {
                 drop
                 plus
@@ -132,14 +155,15 @@
                 constu 947832549783438792
                 call panic
             }
-            // -> x, y, $Day6, current_num
+            // -> $Day6, $Day6xy, current_num
+            swap // -> $Day6, current_num, $Day6xy
+            rot // -> $Day6xy, $Day6, current_num
             #set $Day6.current_num
-            rot // -> $Day6, x, y
-            // y += 1
-            constu 1
-            plus
-        }
-        drop
+            swap // -> $Day6, $Day6xy
+            skip .loop
+        .endloop:
+
+        // -> $Day6, $Day6xy
         drop // -> $Day6
         dup
         #get $Day6.sum
@@ -150,4 +174,46 @@
     }
     drop
     drop
+}
+
+// Read and return the next number for Part1, returning -1 if no further number exists,
+// updating $Day6xy in the process
+//
+// Stack before:
+//     $Day6, $Day6xy
+// Stack after:
+//     $Day6, $Day6xy(updated), number
+#proc day6_next_number_part1 {
+    #if (dup, #get $Day6xy.y) >= (pick 2, #get $Day6.reader.height, constu 1, minus) {
+        consts -1
+        skip .end
+    }
+
+    pick 1
+    #get $Day6.reader // -> $Day6, $Day6xy, $RodataReader2D
+    pick 1
+    #get $Day6xy.x // -> $Day6, $Day6xy, $RodataReader2D, x
+    pick 2
+    #get $Day6xy.y // -> $Day6, $Day6xy, $RodataReader2D, x, y
+    call rodata_reader_2d_get_reader_at
+    call rodata_reader_next_number // -> $Day6, $Day6xy, $RodataReader2D, $RodataReader, number
+    rot // -> $Day6, $Day6xy, number, $RodataReader2D, $RodataReader
+    drop
+    drop // -> $Day6, $Day6xy, number
+
+    swap
+    #set $Day6xy.y += 1
+    swap
+.end:
+}
+
+// Read and return the next number for Part2, returning -1 if no further number exists,
+// updating $Day6xy in the process
+//
+// Stack before:
+//     $Day6, $Day6xy
+// Stack after:
+//     $Day6, $Day6xy(updated), number
+#proc day6_next_number_part2 {
+
 }
