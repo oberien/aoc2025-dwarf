@@ -215,5 +215,21 @@
 // Stack after:
 //     $Day6, $Day6xy(updated), number
 #proc day6_next_number_part2 {
+    #if (dup, #get $Day6xy.x) >= (pick 2, #get $Day6.reader.width) {
+        consts -1
+        skip .end
+    }
+    pick 1
+    #get $Day6.reader // -> $Day6, $Day6xy, $RodataReader2D
+    pick 1
+    #get $Day6xy.x
+    constu 0 // -> $Day6, $Day6xy, $RodataReader2D, x, y
+    call rodata_reader_2d_next_number_vertical // -> $Day6, $Day6xy, $RodataReader2D, number
+    swap
+    drop
 
+    swap
+    #set $Day6xy.x += 1
+    swap
+.end:
 }
