@@ -1,0 +1,153 @@
+#rodata day6_sample {
+    #include_file "days/inputs/day06_sample"
+}
+#rodata day6_input {
+    #include_file "days/inputs/day06_input"
+}
+
+#type $Day6 {
+        reader: $RodataReader2D,
+        last_line_reader: $RodataReader,
+        last_line_start: $u64,
+        current_op: $u8,
+        current_num: $u64,
+        sum: $u64,
+}
+
+#var day6_part1_sample {
+    addr day6_sample
+    addr day6_sample.len
+    call day6
+    #get $Day6.sum
+}
+#var day6_part1 {
+    addr day6_input
+    addr day6_input.len
+    call day6
+    #get $Day6.sum
+}
+
+// In the input, in the last line, the operator is always in the first
+// character-column of a number-column. Thus, we have one reader in the last
+// column to read the next non-whitespace-char, and one Reader2D to read the
+// numbers at that x for each line except the last.
+//
+// Stack before:
+//   input_addr, input_len_addr
+#proc day6 {
+    pick 1
+    pick 1
+    call rodata_reader_new // -> input_addr, input_len_addr, $RodataReader
+    rot
+    call rodata_reader_2d_new // -> $RodataReader, $RodataReader2D
+    #create $Day6 {
+        reader: $RodataReader2D {
+            address: 0,
+            width: 0,
+            height: 0,
+        },
+        last_line_reader: $RodataReader {
+            address: 0,
+            end_address: 0,
+        },
+        last_line_start: 0,
+        current_op: 0,
+        current_num: 0,
+        sum: 0,
+    }
+    swap
+    #set $Day6.reader
+    swap // -> $Day6, $RodataReader
+    call rodata_reader_go_to_last_line
+    dup
+    rot // -> $RodataReader, $Day6, $RodataReader
+    #get $RodataReader.address
+    #set $Day6.last_line_start
+    swap
+    #set $Day6.last_line_reader
+
+    // -> $Day6
+
+    #while (dup, #get $Day6.last_line_reader, call rodata_reader_next_non_whitespace_char, dup) != (consts -1) {
+        // -> $Day6, $RodataReader, char
+        rot
+        #set $Day6.last_line_reader
+        swap // -> $Day6, char
+        dup
+        rot // -> char, $Day6, char
+        #set $Day6.current_op
+        swap // -> $Day6, char
+        #if (dup) == (constu '+') {
+            drop
+            #set $Day6.current_num = 0
+        } #else #if (dup) == (constu '*') {
+            drop
+            #set $Day6.current_num = 1
+        } #else {
+            constu 19238795289
+            call panic
+        }
+        // -> $Day6
+
+
+        // get offset of the op in the last line
+        dup
+        #get $Day6.last_line_reader.address
+        // subtract the current_op character
+        constu 1
+        minus // -> $Day6, address
+        pick 1
+        #get $Day6.last_line_start
+        minus // -> $Day6, x
+
+        constu 0 // -> $Day6, x, y
+
+        // until we reach the second-last line
+        #while (dup) < (pick 3, #get $Day6.reader.height, constu 1, minus) {
+            // -> $Day6, x, y
+            rot
+            rot // -> x, y, $Day6
+            pick 2
+            pick 2 // -> x, y, $Day6, x, y
+            pick 2
+            #get $Day6.reader
+            rot
+            call rodata_reader_2d_get_reader_at
+            call rodata_reader_next_number // -> x, y, $Day6, $RodataReader2D, $RodataReader, number
+            rot
+            drop
+            drop // -> x, y, $Day6, number
+            pick 1
+            #get $Day6.current_num // -> x, y, $Day6, number, current_num
+            pick 2
+            #get $Day6.current_op // -> x, y, $Day6, number, current_num, op
+            #if (dup) == (constu '+') {
+                drop
+                plus
+            } #else #if (dup) == (constu '*') {
+                drop
+                mul
+            } #else {
+                // unreachable
+                constu 947832549783438792
+                call panic
+            }
+            // -> x, y, $Day6, current_num
+            #set $Day6.current_num
+            rot // -> $Day6, x, y
+            // y += 1
+            constu 1
+            plus
+        }
+        drop
+        drop // -> $Day6
+        dup
+        #get $Day6.sum
+        pick 1
+        #get $Day6.current_num
+        plus
+        #set $Day6.sum
+    }
+    drop
+    drop
+}
