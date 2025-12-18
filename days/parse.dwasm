@@ -527,3 +527,63 @@
         call panic
     }
 }
+
+// Read a number in the column (from top to bottom), returning -1 if none was found or eof reached.
+// Stack before:
+//     $RodataReader2D, x, y
+// Stack after:
+//     $RodataReader2D, number
+#proc rodata_reader_2d_next_number_vertical {
+    consts -1 // -> $RodataReader2D, x, y, number
+.loop:
+    pick 3
+    pick 3
+    pick 3
+    consts -1
+    call rodata_reader_2d_get_default // -> $RodataReader2D, x, y, number, $RodataReader2D, char
+    swap
+    drop // -> $RodataReader2D, x, y, number, char
+    #if (dup) == (consts -1) {
+        // eof reached
+        drop
+        rot
+        drop
+        drop
+        skip .end
+    }
+    #if (dup) < (constu '0') or (pick 1) > (constu '9') {
+        // if we already read a number: go to end
+        #if (pick 1) != (consts -1) {
+            drop
+            rot
+            drop
+            drop
+            skip .end
+        }
+        // if we haven't found a number yet: continue
+        drop
+        skip .continue
+    }
+    // if we actually have a number, replace -1 with 0 before adding
+    #if (pick 1) == (consts -1) {
+        swap
+        drop
+        constu 0
+        swap
+    }
+    constu '0'
+    minus // -> $RodataReader, x, y, number, digit
+    swap
+    constu 10
+    mul
+    plus // -> $RodataReader, x, y, number
+
+    .continue:
+    swap
+    constu 1
+    plus
+    swap
+    skip .loop
+
+.end:
+}

@@ -30,6 +30,8 @@
     #debug 14
     call test_rodata_reader_go_to_next_line
     #debug 15
+    call test_rodata_reader_2d_next_number_vertical
+    #debug 16
     constu 1
 }
 
@@ -718,6 +720,110 @@
     call rodata_reader_go_to_next_line
     #if (dup) != (consts -1) {
         constu 854477388783476
+        call panic
+    }
+    drop
+
+    drop
+}
+
+#rodata rodata_reader_2d_next_number_vertical_data {
+    #u8 '1', ' ', 'a', ' ', 'b', '\n'
+    #u8 '2', '5', '8', ' ', 'b', '\n'
+    #u8 '3', '6', '9', '1', 'b', '\n'
+    #u8 '4', '7', '0', ' ', 'b', '\n'
+}
+#proc test_rodata_reader_2d_next_number_vertical {
+    addr rodata_reader_2d_next_number_vertical_data
+    addr rodata_reader_2d_next_number_vertical_data.len
+    call rodata_reader_2d_new
+
+    constu 0
+    constu 0
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (constu 1234) {
+        constu 342987527895489
+        call panic
+    }
+    drop
+
+    constu 0
+    constu 1
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (constu 234) {
+        constu 3849438938493489
+        call panic
+    }
+    drop
+
+    constu 0
+    constu 2
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (constu 34) {
+        constu 70982248098432
+        call panic
+    }
+    drop
+
+    constu 0
+    constu 3
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (constu 4) {
+        constu 230849803489029
+        call panic
+    }
+    drop
+
+    constu 0
+    constu 4
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (consts -1) {
+        constu 23489725978598
+        call panic
+    }
+    drop
+
+    constu 1
+    constu 0
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (constu 567) {
+        constu 43987278925
+        call panic
+    }
+    drop
+
+    constu 2
+    constu 0
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (constu 890) {
+        constu 4398423973
+        call panic
+    }
+    drop
+
+    constu 3
+    constu 0
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (constu 1) {
+        constu 97834223987
+        call panic
+    }
+    drop
+
+    constu 4
+    constu 0
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (consts -1) {
+        constu 4237985498
+        call panic
+    }
+    drop
+
+    constu 5
+    constu 0
+    call rodata_reader_2d_next_number_vertical
+    #if (dup) != (consts -1) {
+        constu 43297842893
         call panic
     }
     drop
