@@ -171,3 +171,29 @@
     swap
     drop
 }
+
+// Replace occurrences of the needle with the replacement character
+// Stack before:
+//     $String, needle, replacement
+// Stack after:
+//     $String
+#proc string_replace_all {
+    rot // -> replacement, $String, needle
+    constu 0 // -> replacement, $String, needle, i
+    #while (dup) < (pick 3, #get $String.len) {
+        #if (pick 2, pick 1, #getindex $String.data) == (pick 2) {
+            rot
+            rot // -> replacement, needle, i, $String
+            pick 3 // -> replacement, needle, i, $String, replacement
+            pick 2 // -> replacement, needle, i, $String, replacement, i
+            #setindex $String.data
+            rot // -> replacement, $String, needle, i
+        }
+        constu 1
+        plus
+    }
+    drop
+    drop
+    swap
+    drop
+}

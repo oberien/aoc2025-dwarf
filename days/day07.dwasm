@@ -1,0 +1,134 @@
+#rodata day7_sample {
+    #include_file "days/inputs/day07_sample"
+}
+#rodata day7_input {
+    #include_file "days/inputs/day07_input"
+}
+
+#type $Day7 {
+        reader: $RodataReader,
+        index: $u64,
+        count: $u64,
+        part12: $u8,
+}
+
+#var day7_part1_sample {
+    addr day7_sample
+    addr day7_sample.len
+    constu 1
+    call day7
+    #get $Day7.count
+}
+#var day7_part1 {
+    addr day7_input
+    addr day7_input.len
+    constu 1
+    call day7
+    #get $Day7.count
+}
+#var day7_part2_sample {
+    addr day7_sample
+    addr day7_sample.len
+    constu 2
+    call day7
+    #get $Day7.count
+}
+#var day7_part2 {
+    addr day7_input
+    addr day7_input.len
+    constu 2
+    call day7
+    #get $Day7.count
+}
+
+// Stack before:
+//   input_addr, input_len_addr, part12
+#proc day7 {
+    #create $Day7 {
+        reader: $RodataReader {
+            address: 0,
+            end_address: 0,
+        },
+        index: 0,
+        count: 0,
+        part12: 0,
+    } // -> input_addr, input_len_addr, part12, $Day7
+    swap
+    #set $Day7.part12 // -> input_addr, input_len_addr, $Day7
+    rot
+    call rodata_reader_new
+    #set $Day7.reader
+
+    // -> $Day7
+    // read first line
+    dup
+    #get $Day7.reader
+    call rodata_reader_read_line // -> $Day7, $RodataReader, $String
+    // replace Start-character with Beam-character
+    constu 'S'
+    constu '|'
+    call string_replace_all // -> $Day7, $RodataReader, $String
+    rot
+    #set $Day7.reader
+    swap // -> $Day7, $String
+
+    #while (pick 1, #get $Day7.reader, call rodata_reader_is_eof) != (constu 1) {
+        // -> $Day7, $String(last), $RodataReader
+        swap
+        rot // -> $String(last), $Day7, $RodataReader
+        call rodata_reader_read_line // -> $String(last), $Day7, $RodataReader, $String(current)
+        rot // -> $String(last), $String(current), $Day7, $RodataReader
+        #set $Day7.reader
+        rot // -> $Day7, $String(last), $String(current)
+        #while (pick 2, #get $Day7.index) < (pick 1, #get $String.len) {
+            #if (pick 1, pick 3, #get $Day7.index, #getindex $String.data) == (constu '|') {
+                // last line has a beam at current index
+                dup
+                pick 3
+                #get $Day7.index
+                #getindex $String.data // -> $Day7, $String(last), $String(current), char
+                #if () == (constu '^') {
+                    // increase count
+                    rot
+                    rot
+                    #set $Day7.count += 1
+                    rot
+                    // split the beam
+                    constu '|'
+                    pick 3
+                    #get $Day7.index
+                    constu 1
+                    minus
+                    #setindex $String.data
+                    constu '|'
+                    pick 3
+                    #get $Day7.index
+                    constu 1
+                    plus
+                    #setindex $String.data
+                } #else #if (pick 1, pick 3, #get $Day7.index, #getindex $String.data) == (constu '|') {
+                    // forward the beam
+                    constu '|'
+                    pick 3
+                    #get $Day7.index
+                    #setindex $String.data
+                }
+            }
+            rot
+            rot // -> $String(last), $String(current), $Day7
+            #set $Day7.index += 1
+            rot
+        }
+        // -> $Day7, $String(last), $String(current)
+        swap
+        drop // -> $Day7, $String(current)
+        swap
+        #set $Day7.index = 0
+        swap
+    }
+
+    // -> $Day7, $String, $RodataReader
+
+    drop // -> $Day7, $String
+    drop
+}
