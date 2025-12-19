@@ -72,6 +72,21 @@
     #set $Day7.reader
     swap // -> $Day7, $String
 
+    #if (pick 1, #get $Day7.part12) == (constu 1) {
+        call day7_solve_part1
+    } #else {
+        call day7_solve_part2
+    }
+
+    // -> $Day7
+}
+
+// Iterative solution for Day07 Part1
+// Stack before:
+//     $Day7, $String(last)
+// Stack after:
+//     $Day7
+#proc day7_solve_part1 {
     #while (pick 1, #get $Day7.reader, call rodata_reader_is_eof) != (constu 1) {
         // -> $Day7, $String(last), $RodataReader
         swap
@@ -130,5 +145,90 @@
     // -> $Day7, $String, $RodataReader
 
     drop // -> $Day7, $String
+    drop // -> $Day7
+}
+
+// TODO: different solution with memory leak
+// Stack before:
+//     $Day7, $String(last)
+// Stack after:
+//     $Day7
+#proc day7_solve_part2 {
     drop
+}
+
+// Recursive solution for Day07 Part2 that recursively goes throguh each path,
+// counting them in the progress.
+// WARNING: This solution won't terminate this life, as there are >350 trillion
+// paths.
+// Stack before:
+//     $Day7, $String(last)
+// Stack after:
+//     $Day7
+#proc day7_solve_part2_doesnt_work {
+    // get index of beam in last line
+    dup
+    constu '|'
+    call bytearray_index_of // -> $Day7, $String(last), beam_index
+    swap
+    drop // -> $Day7, beam_index
+
+    // read next line
+    pick 1
+    #get $Day7.reader // -> $Day7, beam_index, $RodataReader
+    #if (call rodata_reader_is_eof) == (constu 1) {
+        drop
+        drop
+        #set $Day7.count += 1
+        skip .end
+    }
+    swap
+    rot // -> beam_index, $Day7, $RodataReader
+    call rodata_reader_read_line // -> beam_index, $Day7, $RodtaaReader, $String
+    rot
+    #set $Day7.reader //-> beam_index, $String, $Day7
+    rot // -> $Day7, beam_index, $String
+
+    // check if beam needs to be split
+    dup
+    pick 2 // -> $Day7, beam_index, $String, $String, beam_index
+    #getindex $String.data // -> $Day7, beam_index, $String, char
+    #if () == (constu '^') {
+        rot
+        rot // -> beam_index, $String, $Day7
+
+        // left side
+        pick 1 // -> beam_index, $String, $Day7, $String
+        constu '|' // -> beam_index, $String, $Day7, $String, '|'
+        pick 4 // -> beam_index, $String, $Day7, $String, '|', beam_index
+        constu 1
+        minus
+        #setindex $String.data // -> beam_index, $String, $Day7, $String
+        pick 1
+        #get $Day7.reader
+        rot // -> beam_index, $String, $RodataReader, $Day7, $String
+        call day7_solve_part2_doesnt_work // -> beam_index, $String, $RodataReader, $Day7
+
+        // restore reader
+        swap
+        #set $Day7.reader // -> beam_index, $String, $Day7
+
+        // right side
+        rot
+        swap // -> $Day7, $String, beam_index
+        constu 1
+        plus
+        constu '|'
+        swap // -> $Day7, $String, '|', beam_index
+        #setindex $String.data
+        call day7_solve_part2_doesnt_work
+    } #else {
+        swap // -> $Day7, $String, beam_index
+        constu '|'
+        swap
+        #setindex $String.data // -> $Day7, $String
+        call day7_solve_part2_doesnt_work
+    }
+
+.end:
 }
