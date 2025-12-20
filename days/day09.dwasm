@@ -1,0 +1,142 @@
+#rodata day9_sample {
+    #include_file "days/inputs/day09_sample"
+}
+#rodata day9_input {
+    #include_file "days/inputs/day09_input"
+}
+
+#type $Day9 {
+        reader: $RodataReader,
+        current_x: $u64,
+        current_y: $u64,
+        largest_area: $u64,
+        part12: $u8,
+}
+
+#var day9_part1_sample {
+    addr day9_sample
+    addr day9_sample.len
+    constu 1
+    call day9
+    #get $Day9.largest_area
+}
+// takes 7-13 seconds
+#var day9_part1 {
+    addr day9_input
+    addr day9_input.len
+    constu 1
+    call day9
+    #get $Day9.largest_area
+}
+#var day9_part2_sample {
+    addr day9_sample
+    addr day9_sample.len
+    constu 2
+    call day9
+    #get $Day9.largest_area
+}
+#var day9_part2 {
+    addr day9_input
+    addr day9_input.len
+    constu 2
+    call day9
+    #get $Day9.largest_area
+}
+
+// Stack before:
+//   input_addr, input_len_addr, part12
+#proc day9 {
+    #create $Day9 {
+        reader: $RodataReader {
+            address: 0,
+            end_address: 0,
+        },
+        current_x: 0,
+        current_y: 0,
+        largest_area: 0,
+        part12: 0,
+    } // -> input_addr, input_len_addr, part12, $Day9
+    swap
+    #set $Day9.part12 // -> input_addr, input_len_addr, $Day9
+    rot
+    call rodata_reader_new
+    #set $Day9.reader
+
+    // -> $Day9
+
+.loop:
+    // read current x,y
+    dup
+    #get $Day9.reader // -> $Day9, $RodataReader
+    call rodata_reader_next_number // -> $Day9, $RodataReader, x
+    #if (dup) == (consts -1) {
+        drop
+        drop
+        skip .end_loop
+    }
+    rot // -> x, $Day9, $RodataReader
+    call rodata_reader_next_number // -> x, $Day9, $RodataReader, y
+    #if (dup) == (consts -1) {
+        constu 432798392723498
+        call panic
+    }
+    rot // -> x, y, $Day9, $RodataReader
+    #set $Day9.reader
+    swap
+    #set $Day9.current_y
+    swap
+    #set $Day9.current_x // -> $Day9
+
+    // iterate over each x,y after the current one to find the largest area
+    dup
+    #get $Day9.reader // -> $Day9, $RodataReader
+    .inner_loop:
+        // read x,y of next number
+        call rodata_reader_next_number // -> $Day9, $RodataReader, x
+        #if (dup) == (consts -1) {
+            drop
+            drop
+            skip .end_inner_loop
+        }
+        swap // -> $Day9, x, $RodataReader
+        call rodata_reader_next_number // -> $Day9, x, $RodataReader, y
+        #if (dup) == (consts -1) {
+            constu 9342782378952
+            call panic
+        }
+        swap
+        rot // -> $Day9, $RodataReader, x, y
+
+        // get dx
+        swap // -> $Day9, $RodataReader, y, x
+        pick 3
+        #get $Day9.current_x // -> $Day9, $RodataReader, y, x, cx
+        minus
+        abs
+        constu 1
+        plus // -> $Day9, $RodataReader, y, dx
+        // get dy
+        swap // -> $Day9, $RodataReader, dx, y
+        pick 3
+        #get $Day9.current_y
+        minus
+        abs
+        constu 1
+        plus // -> $Day9, $RodataReader, dx, dy
+
+        // calculate area
+        mul // -> $Day9, $RodataReader, area
+        #if (dup) > (pick 3, #get $Day9.largest_area) {
+            swap
+            rot // -> $RodataReader, $Day9, area
+            #set $Day9.largest_area
+            swap
+        } #else {
+            drop
+        }
+        skip .inner_loop
+    .end_inner_loop:
+
+    skip .loop
+.end_loop:
+}
