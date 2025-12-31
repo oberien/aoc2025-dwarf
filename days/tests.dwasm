@@ -489,7 +489,7 @@
 }
 
 #rodata test_rodata_reader_try_read_number_data {
-    #u8 '1', '2', '3', '\n', '\n', 'a', '-', '4', '\n'
+    #u8 '1', '2', '3', '\n', '\n', 'a', '-', '4', '\n', '0', '\n'
 }
 #proc test_rodata_reader_try_read_number {
     addr test_rodata_reader_try_read_number_data
@@ -554,6 +554,17 @@
     }
     drop
 
+    // consume '\n'
+    call rodata_reader_read_char
+    drop
+
+    call rodata_reader_try_read_number
+    #if (dup) != (constu 0) {
+        constu 408458054380890289
+        call panic
+    }
+    drop
+
     call rodata_reader_try_read_number
     #if (dup) != (consts -1) {
         constu 84378743738343764
@@ -578,6 +589,13 @@
     call rodata_reader_next_number
     #if (dup) != (constu 4) {
         constu 23948457029874
+        call panic
+    }
+    drop
+
+    call rodata_reader_next_number
+    #if (dup) != (constu 0) {
+        constu 2439877892423987
         call panic
     }
     drop
