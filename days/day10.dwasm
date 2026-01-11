@@ -1,0 +1,270 @@
+#rodata day10_sample {
+    #include_file "days/inputs/day10_sample"
+}
+#rodata day10_input {
+    #include_file "days/inputs/day10_input"
+}
+
+#type $Day10 {
+        current: [$u8; 10],
+        padding: $u8,
+        target: [$u8; 10],
+        current_buttons_pressed: $u64,
+        current_min_buttons_pressed: $u64,
+        lines_solved: $u64,
+        result: $u64,
+        part12: $u8,
+}
+
+#var day10_part1_sample {
+    addr day10_sample
+    addr day10_sample.len
+    constu 1
+    call day10
+    #get $Day10.result
+}
+// takes 12s in release-mode
+#var day10_part1 {
+    addr day10_input
+    addr day10_input.len
+    constu 1
+    call day10
+    #get $Day10.result
+}
+
+// Stack before:
+//     input_addr, input_len_addr, part12
+// Stack after:
+//     #Day10
+#proc day10 {
+    #create $Day10 {
+        current: [0; 10],
+        padding: 0,
+        target: [0; 10],
+        current_buttons_pressed: 0,
+        current_min_buttons_pressed: 0,
+        lines_solved: 0,
+        result: 0,
+        part12: 0,
+    } // -> input_addr, input_len_addr, part12, $Day10
+    swap
+    #set $Day10.part12 // -> input_addr, input_len_addr, $Day10
+    rot
+    call rodata_reader_new
+
+    // -> $Day10, $RodataReader
+    #while (call rodata_reader_is_eof) != (constu 1) {
+        swap // -> $RodataReader, $Day10
+        // reset $Day10.current*
+        #set $Day10.current[0] = '.'
+        #set $Day10.current[1] = '.'
+        #set $Day10.current[2] = '.'
+        #set $Day10.current[3] = '.'
+        #set $Day10.current[4] = '.'
+        #set $Day10.current[5] = '.'
+        #set $Day10.current[6] = '.'
+        #set $Day10.current[7] = '.'
+        #set $Day10.current[8] = '.'
+        #set $Day10.current[9] = '.'
+        #set $Day10.current_buttons_pressed = 0
+        #set $Day10.current_min_buttons_pressed = 999999999999
+        swap // -> $Day10, $RodataReader
+
+        // read target lights
+        call day10_parse_light_diagram
+        call rodata_reader_skip_whitespace // -> $Day10, $RodataReader
+
+        // call solver
+        dup
+        rot // -> $RodataReader, $Day10, $RodataReader
+        call day10_part1_solve_single // -> $RodataReader, $Day10
+        // add minimum number of buttons required to result
+        dup
+        #get $Day10.current_min_buttons_pressed
+        pick 1
+        #get $Day10.result
+        plus
+        #set $Day10.result
+        #set $Day10.lines_solved += 1
+
+        // skip until after newline (ignore joltage for now)
+        swap
+        call rodata_reader_go_to_next_line
+        drop
+        #debug 1
+    }
+    drop
+    #debug 10
+}
+
+// Recursive brute-force solution:
+// Buttons work as XOR, i.e., a button can either be pressed or not.
+// Pressing a button twice acts as though the button was never pressed.
+// We brute-force the solution by recursively pressing the current button or not,
+// then recursing into the next button.
+// Once we reach the target-solution, we set $Day10.current_min_buttons_pressed
+// to the min of itself and $Day10.current_buttons_pressed.
+// Stack before:
+//     $Day10, $RodataReader
+// Stack after:
+//     $Day10
+#proc day10_part1_solve_single {
+    // store unpressed "current"
+    pick 1
+    #get $Day10.current // -> $Day10, $RodataReader, unpressed
+    rot // -> unpressed, $Day10, $RodataReader
+
+    // read button toggles and apply them
+    call day10_parse_and_apply_button // -> unpressed, $Day10, $RodataReader, result
+
+    // we don't have any further button -> evaluate if success or not
+    #if () == (consts -1) {
+        // -> unpressed, $Day10, $RodataReader
+        drop // -> unpressed, $Day10
+        swap // -> $Day10, unpressed
+        drop // -> $Day10
+        #if (dup, #get $Day10.target) == (pick 1, #get $Day10.current) {
+            #if (dup, #get $Day10.current_buttons_pressed) < (pick 1, #get $Day10.current_min_buttons_pressed) {
+                dup
+                #get $Day10.current_buttons_pressed
+                #debug 99999
+                #set $Day10.current_min_buttons_pressed
+            }
+        }
+        skip .end
+    }
+
+    // -> unpressed, $Day10, $RodataReader
+
+    // recurse in pressed state
+    swap
+    #set $Day10.current_buttons_pressed += 1
+    swap
+    dup
+    rot // -> unpressed, $RodataReader, $Day10, $RodataReader
+    call day10_part1_solve_single // -> unpressed, $RodataReader, $Day10
+
+    // restore unpressed state and recurse in unpressed state
+    rot // -> $Day10, unpressed, $RodataReader
+    rot // -> $RodataReader, $Day10, unpressed
+    #set $Day10.current // -> $RodataReader, $Day10
+    #set $Day10.current_buttons_pressed -= 1
+    swap // -> $Day10, $RodataReader
+    call day10_part1_solve_single // -> $Day10
+.end:
+}
+
+// Reads the target light diagram and stores it in $Day10.target
+// Stack before:
+//     $Day10, $RodataReader
+// Stack after:
+//     $Day10, $RodataReader
+#proc day10_parse_light_diagram {
+    swap
+    #set $Day10.target[0] = '.'
+    #set $Day10.target[1] = '.'
+    #set $Day10.target[2] = '.'
+    #set $Day10.target[3] = '.'
+    #set $Day10.target[4] = '.'
+    #set $Day10.target[5] = '.'
+    #set $Day10.target[6] = '.'
+    #set $Day10.target[7] = '.'
+    #set $Day10.target[8] = '.'
+    #set $Day10.target[9] = '.'
+    swap
+    // consume '['
+    call rodata_reader_read_char
+    #if (dup) != (constu '[') {
+        constu 294797438790
+        call panic
+    }
+    drop
+
+    constu 0 // -> $Day10, $RodataReader, index
+.loop:
+    rot // -> index, $Day10, $RodataReader
+    // read char
+    call rodata_reader_read_char // -> index, $Day10, $RodataReader, char
+    // if char is ']', i.e. end of light diagram: return
+    #if (dup) == (constu ']') {
+        drop // -> index, $Day10, $RodataReader
+        rot // -> $RodataReader, index, $Day10
+        rot // -> $Day10, $RodataReader, index
+        drop
+        skip .end
+    }
+    // store char into target light array
+    swap
+    rot // -> index, $RodataReader, $Day10, char
+    pick 3 // -> index, $RodataReader, $Day10, char, index
+    #setindex $Day10.target // -> index, $RodataReader, $Day10
+
+    // increase index
+    rot // -> $Day10, index, $RodataReader
+    swap // -> $Day10, $RodataReader, index
+    constu 1
+    plus
+
+    skip .loop
+.end:
+}
+
+// Reads a button and applies its pressing to $Day10.current;
+// returns -1 if there is no further button, 1 otherwise
+// Stack before:
+//     $Day10, $RodataReader
+// Stack after:
+//     $Day10, $RodataReader, result
+#proc day10_parse_and_apply_button {
+    call rodata_reader_skip_whitespace
+    // consume '('
+    call rodata_reader_read_char
+    #if () != (constu '(') {
+        #set $RodataReader.address -= 1
+        consts -1
+        skip .end
+    }
+
+    // -> $Day10, $RodataReader
+
+.loop:
+    // read number
+    call rodata_reader_try_read_number // -> $Day10, $RodataReader, number
+    #if (dup) == (consts -1) {
+        // eof
+        constu 97458797983
+        call panic
+    }
+
+    // apply number by toggling the index
+    swap // -> $Day10, index, $RodataReader
+    rot // -> $RodataReader, $Day10, index
+    pick 1
+    pick 1
+    #getindex $Day10.current // -> $RodataReader, $Day10, index, char
+    // we perform `char XOR '#' XOR '.'` to toggle `char` from `#` to `.` or vice versa
+    constu '#'
+    xor
+    constu '.'
+    xor
+    swap // -> $RodataReader, $Day10, char, index
+    #setindex $Day10.current // -> $RodataReader, $Day10
+    swap // -> $Day10, $RodataReader
+
+    // read comma or end-of-button
+    call rodata_reader_read_char // -> $Day10, $RodataReader, char
+    #if (dup) == (constu ',') {
+        drop
+        skip .loop
+    } #else #if (dup) == (constu ')') {
+        drop
+        constu 1
+        skip .end
+    } #else {
+        // got character that's not ',' or ')' after number in button-index-list
+        constu 47574875487
+        call panic
+    }
+
+.end:
+}
