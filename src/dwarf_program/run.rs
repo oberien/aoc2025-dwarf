@@ -16,6 +16,11 @@ impl Rodata {
         }
     }
     fn add_rodata(&mut self, data_index: usize, data: &[u8]) {
+        // align to "pages" of 0x1000 bytes
+        let next_page_start = ((self.data.len() + 4095) / 4096) * 4096;
+        println!("resizing to next page from {:#x} to {next_page_start:#x}", self.data.len());
+        self.data.resize(next_page_start, 0);
+
         self.relocations.insert(data_index, self.data.len());
         self.data.extend_from_slice(data);
     }
