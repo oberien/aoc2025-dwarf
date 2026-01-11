@@ -242,12 +242,12 @@
     swap
 }
 
-// Consumes chars until it finds a non-whitespace and returns it, or -1 on eof.
+// Consumes chars until it finds a non-whitespace or eof.
 // Stack before:
 //     $RodataReader
 // Stack after:
-//     $RodataReader, char
-#proc rodata_reader_next_non_whitespace_char {
+//     $RodataReader
+#proc rodata_reader_skip_whitespace {
     #while (call rodata_reader_try_read_char, dup) != (consts -1) {
         #if (dup) != (constu ' ') and (pick 1) != (constu '\t') and (pick 2) != (constu '\n') and (pick 3) != (constu '\r') {
             skip .end
@@ -255,6 +255,20 @@
         drop
     }
 .end:
+    // unconsume non-whitespace char if non-eof was reached
+    #if () != (consts -1) {
+        #set $RodataReader.address -= 1
+    }
+}
+
+// Consumes chars until it finds a non-whitespace and returns it, or -1 on eof.
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, char
+#proc rodata_reader_next_non_whitespace_char {
+    call rodata_reader_skip_whitespace
+    call rodata_reader_try_read_char
 }
 
 // Consumes chars until it finds a number and returns the number, or -1 on eof.
