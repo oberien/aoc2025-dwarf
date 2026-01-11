@@ -80,6 +80,27 @@ fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a
                 assert!(size <= 255, "type {name} is larger than 255 bytes");
                 let type_die = global_ctx.type_dies[&Type::Custom(name)];
                 program.set_base_type_size(type_die, size as u8);
+
+                fn create_array_types<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a>, typ: Type<'a>) {
+                    match typ {
+                        Type::Array(primitive, len) => {
+                            let die = *global_ctx.type_dies.entry(typ).or_insert_with(|| {
+                                let name = format!("__Array_{len}x{primitive}");
+                                println!("adding array-type {name}");
+                                program.create_base_type(&name, gimli::DW_ATE_unsigned)
+                            });
+                            program.set_base_type_size(die, (primitive_size(primitive) * len).try_into().unwrap());
+                        },
+                        Type::Primitive(_) => (),
+                        Type::Custom(name) => {
+                            let typ = global_ctx.custom_types[name].clone();
+                            for (_name, typ) in typ.fields {
+                                create_array_types(program, global_ctx, typ);
+                            }
+                        }
+                    }
+                }
+                create_array_types(program, global_ctx, Type::Custom(name));
             }
             Item::Procedure { name, body } => {
                 let mut context = FunctionContext {
@@ -302,8 +323,7 @@ fn compile_instruction<'a>(expr: &mut Expression, program: &mut DwarfProgram, gl
                     expr.op_constu(primitive_mask(primitive));
                     expr.op(gimli::DW_OP_and);
                 },
-                Type::Custom(_) => expr.op_convert(Some(global_ctx.type_dies[&field_type])),
-                Type::Array(..) => unreachable!("{path:?}"),
+                Type::Custom(_) | Type::Array(..) => expr.op_convert(Some(global_ctx.type_dies[&field_type])),
             }
         }
         Instruction::SetIndex(path) => {
@@ -537,27 +557,30 @@ fn field_offset<'a>(typ: &'a str, path: &[(&str, Option<usize>)], global_ctx: &G
     field_offset_internal(Type::Custom(typ), None, path, global_ctx)
 }
 fn field_offset_internal<'a>(typ: Type<'a>, index: Option<usize>, path: &[(&str, Option<usize>)], global_ctx: &GlobalContext<'a>) -> (u8, Type<'a>) {
-    let type_name = match typ {
-        Type::Custom(name) => name,
-        Type::Array(primitive, len) => {
+    let type_name = match (typ, index) {
+        (Type::Custom(name), None) => name,
+        (Type::Array(primitive, len), None) => {
             assert!(path.is_empty(), "field access reached array `{typ}`, but field accesses are left: .{}", path.iter().map(|(field, _)| field).join("."));
-            assert!(index.is_some(), "tried to access an array-field without index: {typ:?}");
-            let index = index.unwrap();
+            return (0, Type::Array(primitive, len));
+        }
+        (Type::Array(primitive, len), Some(index)) => {
+            assert!(path.is_empty(), "field access reached array `{typ}`, but field accesses are left: .{}", path.iter().map(|(field, _)| field).join("."));
             assert!(index < len, "index `{index}` out of bounds len `{len}`");
             let primitive_size = primitive_size(primitive);
             return ((primitive_size * index).try_into().unwrap(), Type::Primitive(primitive));
         }
-        Type::Primitive(primitive) => {
+        (Type::Primitive(primitive), None) => {
             assert!(path.is_empty(), "field access reached primitive, but field accesses are left: .{}", path.iter().map(|(field, _)| field).join("."));
             return (0, Type::Primitive(primitive))
         }
+        (Type::Primitive(primitive), Some(index)) => panic!("primitive type {primitive} access can't have array index, index {index}"),
+        (Type::Custom(name), Some(index)) => panic!("field access path has an index for non-array {name}, index {index}"),
     };
     let typ = global_ctx.custom_types.get(type_name)
         .unwrap_or_else(|| panic!("unknown type {type_name}"));
     if path.is_empty() {
         return (0, Type::Custom(type_name));
     }
-    assert!(index.is_none(), "field access path has an index for non-array {type_name}, index {}", index.unwrap());
 
     let mut offset = 0u8;
     let (field_name, index) = path[0];

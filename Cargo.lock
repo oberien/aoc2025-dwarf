@@ -84,6 +84,7 @@ dependencies = [
  "ignore",
  "indent_write",
  "itertools",
+ "num-bigint",
  "object 0.38.0",
  "tempfile",
 ]

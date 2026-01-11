@@ -1,6 +1,7 @@
 use std::process::Command;
 use tempfile::NamedTempFile;
-use gimli::Value;
+use gimli::{ByteLen, Value};
+use num_bigint::BigUint;
 use crate::compile::compile;
 use crate::dwarf_program::DwarfProgram;
 use crate::parse::parse;
@@ -505,6 +506,32 @@ fn test_while() {
             drop // sum
         }
     "#, Value::Generic(45));
+}
+
+#[test]
+fn test_get_set_array() {
+    run(r#"
+        #type $Foo {
+            array: [$u8; 3],
+        }
+
+        #var test {
+            #create $Foo {
+                array: [0; 3],
+            }
+            #create $Foo {
+                array: [0; 3],
+            } // -> $Foo, $Foo
+
+            #set $Foo.array[0] = 1
+            #set $Foo.array[1] = 2
+            #set $Foo.array[2] = 3
+
+            #get $Foo.array // -> $Foo, array
+            #set $Foo.array // -> $Foo
+            #get $Foo.array // -> array
+        }
+    "#, Value::UnsignedBaseType(BigUint::from(0x010203u32), ByteLen(3)));
 }
 
 #[test]
