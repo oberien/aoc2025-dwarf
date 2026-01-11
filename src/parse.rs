@@ -156,6 +156,7 @@ pub enum Instruction<'a> {
     /// Pop an index and a type from the stack and push the value of the (possibly nested) array-element at the given index
     GetIndex(Path<'a>),
     /// Pop an index and a value from the stack and set the value as the (possibly nested) array-element at the given index of the now-topmost type
+    /// before: type, value, index; after: type
     SetIndex(Path<'a>),
 }
 
