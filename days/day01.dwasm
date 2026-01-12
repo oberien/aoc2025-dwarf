@@ -1,9 +1,11 @@
 #rodata day1_sample {
     #include_file "days/inputs/day01_sample"
 }
+#macro_if_file_exists "days/inputs/day01_input"
 #rodata day1_input {
     #include_file "days/inputs/day01_input"
 }
+#macro_end_if_file_exists
 
 #type $Day1 {
     len: $u64,
@@ -23,19 +25,20 @@
     call day1
     #get $Day1.zero_count
 }
-#var day1_part1 {
-    addr day1_input
-    addr day1_input.len
-    deref
-    call day1
-    #get $Day1.zero_count
-}
 #var day1_part2_sample {
     addr day1_sample
     addr day1_sample.len
     deref
     call day1
     #get $Day1.click_count
+}
+#macro_if_file_exists "days/inputs/day01_input"
+#var day1_part1 {
+    addr day1_input
+    addr day1_input.len
+    deref
+    call day1
+    #get $Day1.zero_count
 }
 #var day1_part2 {
     addr day1_input
@@ -44,6 +47,7 @@
     call day1
     #get $Day1.click_count
 }
+#macro_end_if_file_exists
 
 #proc day1 {
     #create $Day1 {

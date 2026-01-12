@@ -1,9 +1,11 @@
 #rodata day5_sample {
     #include_file "days/inputs/day05_sample"
 }
+#macro_if_file_exists "days/inputs/day05_input"
 #rodata day5_input {
     #include_file "days/inputs/day05_input"
 }
+#macro_end_if_file_exists
 
 #type $Day5 {
         range_reader_default: $RodataReader,
@@ -19,6 +21,7 @@
     call day5
     #get $Day5.sum
 }
+#macro_if_file_exists "days/inputs/day05_input"
 // takes 15s
 #var day5_part1 {
     addr day5_input
@@ -27,6 +30,7 @@
     call day5
     #get $Day5.sum
 }
+#macro_end_if_file_exists
 
 // Stack before:
 //   $RodataReader

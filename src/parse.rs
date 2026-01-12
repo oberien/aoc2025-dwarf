@@ -31,6 +31,13 @@ pub enum Item<'a> {
 }
 
 #[derive(Debug, Clone)]
+enum ItemOrMacro<'a> {
+    Item(Item<'a>),
+    MacroIfFileExists(Cow<'a, str>),
+    MacroEndIfFileExists,
+}
+
+#[derive(Debug, Clone)]
 pub enum Instruction<'a> {
     /// DW_OP_addr
     Addr(Addr<'a>),
@@ -408,7 +415,7 @@ impl Display for Path<'_> {
 }
 
 pub fn parse(src: &str) -> Vec<Item<'_>> {
-    match items().parse(src).into_result() {
+    let ast = match item_or_macros().parse(src).into_result() {
         Ok(ast) => ast,
         Err(parse_errs) => {
             for e in parse_errs {
@@ -426,26 +433,42 @@ pub fn parse(src: &str) -> Vec<Item<'_>> {
             }
             panic!("encountered errors");
         },
-    }
+    };
+    let mut consuming = false;
+    ast.into_iter().filter_map(|i| match i {
+        ItemOrMacro::Item(item) if !consuming => Some(item),
+        ItemOrMacro::Item(_) => None,
+        ItemOrMacro::MacroIfFileExists(path) => {
+            consuming = !std::fs::exists(&*path).unwrap();
+            None
+        }
+        ItemOrMacro::MacroEndIfFileExists => {
+            consuming = false;
+            None
+        }
+    }).collect()
 }
 
-fn items<'a>() -> impl Parser<'a, Vec<Item<'a>>> {
+fn item_or_macros<'a>() -> impl Parser<'a, Vec<ItemOrMacro<'a>>> {
     choice((
         just("#rodata")
             .ignore_then(label().padded())
             .then(define_data().padded().padded_by(comment().repeated()).repeated().collect().delimited_by(just('{'), just('}')))
-            .map(|(name, def_data)| Item::Rodata { name, def_data }),
+            .map(|(name, def_data)| ItemOrMacro::Item(Item::Rodata { name, def_data })),
         just("#type").padded()
             .ignore_then(custom_type())
-            .map(Item::Type),
+            .map(|typ| ItemOrMacro::Item(Item::Type(typ))),
         just("#proc")
             .ignore_then(label().padded())
             .then(instructions(instruction()).padded().delimited_by(just('{'), just("}")))
-            .map(|(name, body)| Item::Procedure { name, body }),
+            .map(|(name, body)| ItemOrMacro::Item(Item::Procedure { name, body })),
         just("#var")
             .ignore_then(label().padded())
             .then(instructions(instruction()).padded().delimited_by(just('{'), just("}")))
-            .map(|(name, body)| Item::Variable { name, body }),
+            .map(|(name, body)| ItemOrMacro::Item(Item::Variable { name, body })),
+        just("#macro_if_file_exists").padded().ignore_then(dqstring())
+            .map(|file| ItemOrMacro::MacroIfFileExists(file)),
+        just("#macro_end_if_file_exists").padded().to(ItemOrMacro::MacroEndIfFileExists),
     )).padded_by(comment().repeated()).padded().repeated().collect()
 }
 

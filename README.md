@@ -124,6 +124,8 @@ be able to run the code.
   #u64
   #i64
   #include_file
+  #macro_if_file_exists
+  #macro_end_if_file_exists
   ```
 * After adding -> File Name Patterns: `*.dwasm`
 

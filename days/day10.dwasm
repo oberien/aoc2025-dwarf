@@ -1,9 +1,11 @@
 #rodata day10_sample {
     #include_file "days/inputs/day10_sample"
 }
+#macro_if_file_exists "days/inputs/day10_input"
 #rodata day10_input {
     #include_file "days/inputs/day10_input"
 }
+#macro_end_if_file_exists
 
 #type $Day10 {
         current: [$u8; 10],
@@ -23,6 +25,7 @@
     call day10
     #get $Day10.result
 }
+#macro_if_file_exists "days/inputs/day10_input"
 // takes 12s in release-mode
 #var day10_part1 {
     addr day10_input
@@ -31,6 +34,7 @@
     call day10
     #get $Day10.result
 }
+#macro_end_if_file_exists
 
 // Stack before:
 //     input_addr, input_len_addr, part12

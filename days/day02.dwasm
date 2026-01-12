@@ -1,9 +1,11 @@
 #rodata day2_sample {
     #include_file "days/inputs/day02_sample"
 }
+#macro_if_file_exists "days/inputs/day02_input"
 #rodata day2_input {
     #include_file "days/inputs/day02_input"
 }
+#macro_end_if_file_exists
 
 #type $Day2 {
     len: $u64,
@@ -23,20 +25,21 @@
     call day2
     #get $Day2.sum
 }
+#var day2_part2_sample {
+    addr day2_sample
+    addr day2_sample.len
+    deref
+    constu 2
+    call day2
+    #get $Day2.sum
+}
+#macro_if_file_exists "days/inputs/day02_input"
 // takes ~4min
 #var day2_part1 {
     addr day2_input
     addr day2_input.len
     deref
     constu 1
-    call day2
-    #get $Day2.sum
-}
-#var day2_part2_sample {
-    addr day2_sample
-    addr day2_sample.len
-    deref
-    constu 2
     call day2
     #get $Day2.sum
 }
@@ -49,6 +52,7 @@
     call day2
     #get $Day2.sum
 }
+#macro_end_if_file_exists
 
 // Stack before:
 //   input_addr, input_len, part12

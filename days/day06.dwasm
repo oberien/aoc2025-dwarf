@@ -1,9 +1,11 @@
 #rodata day6_sample {
     #include_file "days/inputs/day06_sample"
 }
+#macro_if_file_exists "days/inputs/day06_input"
 #rodata day6_input {
     #include_file "days/inputs/day06_input"
 }
+#macro_end_if_file_exists
 
 #type $Day6 {
         reader: $RodataReader2D,
@@ -27,17 +29,18 @@
     call day6
     #get $Day6.sum
 }
-#var day6_part1 {
-    addr day6_input
-    addr day6_input.len
-    constu 1
-    call day6
-    #get $Day6.sum
-}
 #var day6_part2_sample {
     addr day6_sample
     addr day6_sample.len
     constu 2
+    call day6
+    #get $Day6.sum
+}
+#macro_if_file_exists "days/inputs/day06_input"
+#var day6_part1 {
+    addr day6_input
+    addr day6_input.len
+    constu 1
     call day6
     #get $Day6.sum
 }
@@ -48,6 +51,7 @@
     call day6
     #get $Day6.sum
 }
+#macro_end_if_file_exists
 
 // In the input, in the last line, the operator is always in the first
 // character-column of a number-column. Thus, we have one reader in the last

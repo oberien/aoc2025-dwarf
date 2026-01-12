@@ -1,9 +1,11 @@
 #rodata day3_sample {
     #include_file "days/inputs/day03_sample"
 }
+#macro_if_file_exists "days/inputs/day03_input"
 #rodata day3_input {
     #include_file "days/inputs/day03_input"
 }
+#macro_end_if_file_exists
 
 #type $Day3 {
     reader: $RodataReader,
@@ -20,19 +22,20 @@
     call day3
     #get $Day3.sum
 }
-#var day3_part1 {
-    addr day3_input
-    addr day3_input.len
-    call rodata_reader_new
-    constu 2
-    call day3
-    #get $Day3.sum
-}
 #var day3_part2_sample {
     addr day3_sample
     addr day3_sample.len
     call rodata_reader_new
     constu 12
+    call day3
+    #get $Day3.sum
+}
+#macro_if_file_exists "days/inputs/day03_input"
+#var day3_part1 {
+    addr day3_input
+    addr day3_input.len
+    call rodata_reader_new
+    constu 2
     call day3
     #get $Day3.sum
 }
@@ -44,6 +47,7 @@
     call day3
     #get $Day3.sum
 }
+#macro_end_if_file_exists
 
 // Stack before:
 //   $RodataReader, num_digits

@@ -1,9 +1,11 @@
 #rodata day9_sample {
     #include_file "days/inputs/day09_sample"
 }
+#macro_if_file_exists "days/inputs/day09_input"
 #rodata day9_input {
     #include_file "days/inputs/day09_input"
 }
+#macro_end_if_file_exists
 
 #type $Day9 {
         reader: $RodataReader,
@@ -20,18 +22,19 @@
     call day9
     #get $Day9.largest_area
 }
+#var day9_part2_sample {
+    addr day9_sample
+    addr day9_sample.len
+    constu 2
+    call day9
+    #get $Day9.largest_area
+}
+#macro_if_file_exists "days/inputs/day09_input"
 // takes 7-13 seconds
 #var day9_part1 {
     addr day9_input
     addr day9_input.len
     constu 1
-    call day9
-    #get $Day9.largest_area
-}
-#var day9_part2_sample {
-    addr day9_sample
-    addr day9_sample.len
-    constu 2
     call day9
     #get $Day9.largest_area
 }
@@ -42,6 +45,7 @@
     call day9
     #get $Day9.largest_area
 }
+#macro_end_if_file_exists
 
 // Stack before:
 //   input_addr, input_len_addr, part12

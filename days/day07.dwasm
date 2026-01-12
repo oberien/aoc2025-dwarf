@@ -1,9 +1,11 @@
 #rodata day7_sample {
     #include_file "days/inputs/day07_sample"
 }
+#macro_if_file_exists "days/inputs/day07_input"
 #rodata day7_input {
     #include_file "days/inputs/day07_input"
 }
+#macro_end_if_file_exists
 
 #type $Day7 {
         reader: $RodataReader,
@@ -19,17 +21,18 @@
     call day7
     #get $Day7.count
 }
-#var day7_part1 {
-    addr day7_input
-    addr day7_input.len
-    constu 1
-    call day7
-    #get $Day7.count
-}
 #var day7_part2_sample {
     addr day7_sample
     addr day7_sample.len
     constu 2
+    call day7
+    #get $Day7.count
+}
+#macro_if_file_exists "days/inputs/day07_input"
+#var day7_part1 {
+    addr day7_input
+    addr day7_input.len
+    constu 1
     call day7
     #get $Day7.count
 }
@@ -40,6 +43,7 @@
     call day7
     #get $Day7.count
 }
+#macro_end_if_file_exists
 
 // Stack before:
 //   input_addr, input_len_addr, part12
