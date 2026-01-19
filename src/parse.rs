@@ -453,7 +453,7 @@ fn item_or_macros<'a>() -> impl Parser<'a, Vec<ItemOrMacro<'a>>> {
     choice((
         just("#rodata")
             .ignore_then(label().padded())
-            .then(define_data().padded().padded_by(comment().repeated()).repeated().collect().delimited_by(just('{'), just('}')))
+            .then(define_data().padded().padded_by(comment().padded().repeated()).repeated().collect().delimited_by(just('{'), just('}')))
             .map(|(name, def_data)| ItemOrMacro::Item(Item::Rodata { name, def_data })),
         just("#type").padded()
             .ignore_then(custom_type())
@@ -469,11 +469,11 @@ fn item_or_macros<'a>() -> impl Parser<'a, Vec<ItemOrMacro<'a>>> {
         just("#macro_if_file_exists").padded().ignore_then(dqstring())
             .map(|file| ItemOrMacro::MacroIfFileExists(file)),
         just("#macro_end_if_file_exists").padded().to(ItemOrMacro::MacroEndIfFileExists),
-    )).padded_by(comment().repeated()).padded().repeated().collect()
+    )).padded_by(comment().padded().repeated()).padded().repeated().collect()
 }
 
 fn instructions<'a>(instruction: impl Parser<'a, Instruction<'a>> + Clone) -> impl Parser<'a, Vec<Instruction<'a>>> + Clone {
-    instruction.padded().padded_by(comment().repeated()).padded().padded_by(comment().repeated()).repeated().collect()
+    instruction.padded().padded_by(comment().padded().repeated()).padded().padded_by(comment().padded().repeated()).repeated().collect()
 }
 
 fn comment<'a>() -> impl Parser<'a, ()> + Clone {
@@ -539,15 +539,15 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
         label().then_ignore(just(':')).map(Instruction::Label),
         just("#debug").ignore_then(whitespace().ignore_then(u64()).or_not()).map(Instruction::Debug),
         just("#if")
-            .padded().padded_by(comment().repeated())
+            .padded().padded_by(comment().padded().repeated())
             .ignore_then(condition(instruction.clone()))
-            .padded().padded_by(comment().repeated())
+            .padded().padded_by(comment().padded().repeated())
             .then_ignore(just('{').padded())
-            .padded().padded_by(comment().repeated())
+            .padded().padded_by(comment().padded().repeated())
             .then(instructions(instruction.clone()))
-            .padded().padded_by(comment().repeated())
+            .padded().padded_by(comment().padded().repeated())
             .then_ignore(just('}').padded())
-            .padded().padded_by(comment().repeated())
+            .padded().padded_by(comment().padded().repeated())
             .separated_by(just("#else"))
             .at_least(1)
             .collect::<Vec<_>>()
@@ -560,12 +560,12 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
                     .or_not()
                     .map(Option::unwrap_or_default)
             ).map(|(ifs, els)| Instruction::IfElse(ifs, els)),
-        just("#while").padded().padded_by(comment().repeated())
+        just("#while").padded().padded_by(comment().padded().repeated())
             .ignore_then(condition(instruction.clone()))
             .then_ignore(just('{').padded())
-            .padded().padded_by(comment().repeated())
+            .padded().padded_by(comment().padded().repeated())
             .then(instructions(instruction.clone()))
-            .padded().padded_by(comment().repeated())
+            .padded().padded_by(comment().padded().repeated())
             .then_ignore(just('}').padded())
             .map(|(cond, body)| Instruction::While(cond, body)),
         just("#create").padded()
@@ -584,7 +584,7 @@ fn instruction<'a>() -> impl Parser<'a, Instruction<'a>> + Clone {
             .ignore_then(path().padded())
             .then(set_assign().padded().then(i64().padded()).or_not())
             .map(|(path, assign)| Instruction::Set(path, assign)),
-    )))).padded_by(comment().repeated()).padded()
+    )))).padded_by(comment().padded().repeated()).padded()
 }
 
 fn path<'a>() -> impl Parser<'a, Path<'a>> + Clone {
@@ -616,10 +616,10 @@ fn condition<'a>(instruction: impl Parser<'a, Instruction<'a>> + Clone + 'a) -> 
             .separated_by(just(',')).allow_trailing()
             .collect::<Vec<_>>()
             .delimited_by(just('('), just(')'));
-        let atom = instructions.clone().padded().padded_by(comment().repeated().padded())
-            .then(cond_op().padded()).padded().padded_by(comment().repeated().padded())
+        let atom = instructions.clone().padded().padded_by(comment().padded().repeated().padded())
+            .then(cond_op().padded()).padded().padded_by(comment().padded().repeated().padded())
             .then(instructions)
-            .padded().padded_by(comment().repeated().padded())
+            .padded().padded_by(comment().padded().repeated().padded())
             .map(|((lhs, op), rhs)| Condition::Atom { lhs, op, rhs });
 
         let and = atom.clone().padded()
@@ -942,7 +942,7 @@ fn custom_type<'a>() -> impl Parser<'a, CustomType<'a>> + Clone {
     just('$').ignore_then(ident()).to_slice()
         .padded()
         .then(
-            field_def().separated_by(just(',').padded().padded_by(comment().repeated())).allow_trailing().collect()
+            field_def().separated_by(just(',').padded().padded_by(comment().padded().repeated())).allow_trailing().collect()
                 .delimited_by(just('{'), just('}'))
         ).map(|(name, fields)| CustomType { name, fields })
 }
