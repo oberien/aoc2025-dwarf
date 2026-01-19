@@ -1,0 +1,157 @@
+#rodata day11_sample {
+    #include_file "days/inputs/day11_sample"
+}
+#macro_if_file_exists "days/inputs/day11_input"
+#rodata day11_input {
+    #include_file "days/inputs/day11_input"
+}
+#macro_end_if_file_exists
+
+#type $Day11 {
+        reader: $RodataReader,
+        result: $u64,
+        part12: $u8,
+}
+
+#var day11_part1_sample {
+    addr day11_sample
+    addr day11_sample.len
+    constu 1
+    call day11
+    #get $Day11.result
+}
+#macro_if_file_exists "days/inputs/day11_input"
+// release takes 40s
+#var day11_part1 {
+    addr day11_input
+    addr day11_input.len
+    constu 1
+    call day11
+    #get $Day11.result
+}
+#macro_end_if_file_exists
+
+// Stack before:
+//     input_addr, input_len_addr, part12
+// Stack after:
+//     #Day11
+#proc day11 {
+    #create $Day11 {
+        reader: $RodataReader {
+            address: 0,
+            end_address: 0,
+        },
+        result: 0,
+        part12: 0,
+    } // -> input_addr, input_len_addr, part12, $Day11
+    swap
+    #set $Day11.part12 // -> input_addr, input_len_addr, $Day11
+    rot
+    call rodata_reader_new
+    #set $Day11.reader // -> $Day11
+
+    // NOTE: the provided graph is acyclic
+    // NOTE: the provided graph ends exactly with "out"; if a node points to
+    //       "out", that node has no other outgoing edges
+
+    // hex((ord('y') << 16) + (ord('o') << 8) + ord('u'))
+    constu 0x796f75
+
+    call day11_find_number_of_paths_to_out
+}
+
+// Recursive DFS
+// Stack before:
+//     $Day11, current-node
+// Stack after:
+//     $Day11
+#proc day11_find_number_of_paths_to_out {
+    call day11_find_node // -> $Day11, $RodataReader
+
+    // while not end-of-line / end-of-file
+    #while (call rodata_reader_try_read_char) == (constu ' ') {
+        call day11_read_node_name // -> $Day11, $RodataReader, node
+
+        // 0x6f7574 == hex((ord('o') << 16) + (ord('u') << 8) + ord('t'))
+        #if (dup) == (constu 0x6f7574) {
+            // "out" reached -> increment and return
+            drop // -> $Day11, $RodataReader
+            drop // -> $Day11
+            #set $Day11.result += 1
+            skip .end
+        }
+
+        swap // -> $Day11, node, $RodataReader
+        rot // -> $RodataReader, $Day11, node
+        call day11_find_number_of_paths_to_out // -> $RodataReader, $Day11
+        swap // -> $Day11, $RodataReader
+    }
+    drop // -> $Day11
+.end:
+}
+
+// Stack before:
+//     $Day11, node-to-find
+// Stack after:
+//     $Day11, $RodataReader
+#proc day11_find_node {
+    pick 1
+    #get $Day11.reader // -> $Day11, node-to-find, $RodataReader
+    call day11_read_node_name // -> $Day11, node-to-find, $RodataReader, node
+
+    #while () != (pick 2) {
+        call rodata_reader_go_to_next_line
+        #if () == (consts -1) {
+            constu 87278948923
+            call panic
+        }
+        call day11_read_node_name // -> $Day11, node-to-find, $RodataReader, node
+    }
+    call day11_consume_colon
+    swap // -> $Day11, $RodataReader, node-to-find
+    drop // -> $Day11, $RodataReader
+}
+
+// Read the name of a node (three characters) as 3 bytes of a generic number
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, name
+#proc day11_read_node_name {
+    constu 0 // -> $RodataReader, name
+    // read first char
+    swap // -> name, $RodataReader
+    call rodata_reader_read_char // -> name, $RodataReader, char
+    swap
+    rot // -> $RodataReader, name, char
+    constu 16
+    shl
+    plus // -> $RodataReader, name
+    // read second char
+    swap // -> name, $RodataReader
+    call rodata_reader_read_char // -> name, $RodataReader, char
+    swap
+    rot // -> $RodataReader, name, char
+    constu 8
+    shl
+    plus // -> $RodataReader, name
+    // read third char
+    swap // -> name, $RodataReader
+    call rodata_reader_read_char // -> name, $RodataReader, char
+    swap
+    rot // -> $RodataReader, name, char
+    plus // -> $RodataReader, name
+}
+
+// Reads a char, panicking if it's not a ':'
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader
+#proc day11_consume_colon {
+    call rodata_reader_try_read_char
+    #if () != (constu ':') {
+        constu 928744398423982
+        call panic
+    }
+}
