@@ -8,9 +8,19 @@
 #macro_end_if_file_exists
 
 #type $Day11 {
-        reader: $RodataReader,
-        result: $u64,
-        part12: $u8,
+    reader: $RodataReader,
+    target_node: $u64,
+    last_layer: $Day11Layer,
+    current_layer: $Day11Layer,
+    current_depth: $u8,
+    target_depth: $u8,
+    result: $u64,
+    part12: $u8,
+}
+// for Part2 a description of one layer to solve
+#type $Day11Layer {
+    nodes: [$u32; 5],
+    paths: [$u64; 5],
 }
 
 #var day11_part1_sample {
@@ -29,6 +39,14 @@
     call day11
     #get $Day11.result
 }
+// release takes 28min
+#var day11_part2 {
+    addr day11_input
+    addr day11_input.len
+    constu 2
+    call day11
+    #get $Day11.result
+}
 #macro_end_if_file_exists
 
 // Stack before:
@@ -41,6 +59,17 @@
             address: 0,
             end_address: 0,
         },
+        target_node: 0,
+        last_layer: $Day11Layer {
+            nodes: [0; 5],
+            paths: [0; 5],
+        },
+        current_layer: $Day11Layer {
+            nodes: [0; 5],
+            paths: [0; 5],
+        },
+        current_depth: 0,
+        target_depth: 0,
         result: 0,
         part12: 0,
     } // -> input_addr, input_len_addr, part12, $Day11
@@ -50,31 +79,402 @@
     call rodata_reader_new
     #set $Day11.reader // -> $Day11
 
+    #if (dup, #get $Day11.part12) == (constu 1) {
+        call day11_part1
+    } #else {
+        call day11_part2
+    }
+
+}
+
+// Stack before:
+//     $Day11
+// Stack after:
+//     $Day11
+#proc day11_part1 {
     // NOTE: the provided graph is acyclic
     // NOTE: the provided graph ends exactly with "out"; if a node points to
     //       "out", that node has no other outgoing edges
 
+    // hex((ord('o') << 16) + (ord('u') << 8) + ord('t'))
+    #set $Day11.target_depth = 7
+    #set $Day11.target_node = 0x6f7574
     // hex((ord('y') << 16) + (ord('o') << 8) + ord('u'))
-    constu 0x796f75
+    constu 0x796f75 // -> $Day11, start-node
 
-    call day11_find_number_of_paths_to_out
+    call day11_find_number_of_paths_to_target
 }
 
-// Recursive DFS
+// Stack before:
+//     $Day11
+// Stack after:
+//     $Day11
+#proc day11_part2 {
+    // NOTE: the graph looks like this (using the helper cargo-script day11_graph.rs):
+    // <layer>: <relevant-nodes>
+    // 5 + 5 + 4 + 20 + 15 + 3 + 3 + 3
+    // 00: svr
+    // ...
+    // 07: pvg ukh jyc znl smo
+    // ...
+    // 09: ... fft ...
+    // ...
+    // 12: abx eob wwh qtr
+    // ...
+    // 18: dxr uaq hpw bzo yer
+    // ...
+    // 24: wuc onc bsj
+    // ...
+    // 27: ... dac ...
+    // ...
+    // 30: pup gwd you
+    // ...
+    // 37: out
+    //
+    // What we can do is calculate the number of paths in stages
+    // <depth>: <hex-node> <node> = <calculate-depth>
+    // 37: 0x6f7574 out = 1
+    // 30: 0x707570 pup = pup -> out
+    // 30: 0x677764 gwd = gwd -> out
+    // 30: 0x796f75 you = you -> out
+    // 27: 0x646163 dac = (dac -> pup) * pup + (dac -> gwd) * gwd + (dac -> you) * you
+    // 24: 0x777563 wuc = (wuc -> dac) * dac
+    // 24: 0x6f6e63 onc = (onc -> dac) * dac
+    // 24: 0x62736a bsj = (bsj -> dac) * dac
+    // 18: 0x647872 dxr = (dxr -> wuc) * wuc + (dxr -> onc) * onc + (dxr -> bsj) * bsj
+    // 18: 0x756171 uaq = (uaq -> wuc) * wuc + (uaq -> onc) * onc + (uaq -> bsj) * bsj
+    // 18: 0x687077 hpw = (hpw -> wuc) * wuc + (hpw -> onc) * onc + (hpw -> bsj) * bsj
+    // 18: 0x627a6f bzo = (bzo -> wuc) * wuc + (bzo -> onc) * onc + (bzo -> bsj) * bsj
+    // 18: 0x796572 yer = (yer -> wuc) * wuc + (yer -> onc) * onc + (yer -> bsj) * bsj
+    // 12: 0x616278 abx = (abx -> dxr) * dxr + (abx -> uaq) * uaq + (abx -> hpw) * hpw + (abx -> bzo) * bzo + (abx -> yer) * yer
+    // 12: 0x656f62 eob = (eob -> dxr) * dxr + (eob -> uaq) * uaq + (eob -> hpw) * hpw + (eob -> bzo) * bzo + (eob -> yer) * yer
+    // 12: 0x777768 wwh = (wwh -> dxr) * dxr + (wwh -> uaq) * uaq + (wwh -> hpw) * hpw + (wwh -> bzo) * bzo + (wwh -> yer) * yer
+    // 12: 0x717472 qtr = (qtr -> dxr) * dxr + (qtr -> uaq) * uaq + (qtr -> hpw) * hpw + (qtr -> bzo) * bzo + (qtr -> yer) * yer
+    // 09: 0x666674 fft = (fft -> abx) * abx + (fft -> eob) * eob + (fft -> wwh) * wwh + (fft -> qtr) * qtr
+    // 07: 0x707667 pvg = (pvg -> fft) * fft
+    // 07: 0x756b68 ukh = (ukh -> fft) * fft
+    // 07: 0x6a7963 jyc = (jyc -> fft) * fft
+    // 07: 0x7a6e6c znl = (znl -> fft) * fft
+    // 07: 0x736d6f smo = (smo -> fft) * fft
+    // 00: 0x737672 svr = (svr -> pvg) * pvg + (svr -> ukh) * ukh + (svr -> jyc) * jyc + (svr -> znl) * znl + (svr -> smo) * smo
+    //
+    //
+    // >>> print('\n'.join('0x' + hex(ord(s[0]))[2:] + hex(ord(s[1]))[2:] + hex(ord(s[2]))[2:] for s in "out pup gwd you dac wuc onc bsj dxr uaq hpw bzo yer abx eob wwh qtr fft pvg ukh jyc znl smo svr".split(' ')))
+    // >>> print('\n'.join('0x' + hex(ord(s[0]))[2:] + hex(ord(s[1]))[2:] + hex(ord(s[2]))[2:] for s in "svr pvg ukh jyc znl smo fft abx eob wwh qtr dxr uaq hpw bzo yer wuc onc bsj dac pup gwd you out".split(' ')))
+
+    // 37: 0x6f7574 out = 1
+    #set $Day11.last_layer.nodes[0] = 0x6f7574
+    #set $Day11.last_layer.paths[0] = 1
+    #set $Day11.last_layer.nodes[1] = 0
+    #set $Day11.last_layer.paths[1] = 0
+    #set $Day11.last_layer.nodes[2] = 0
+    #set $Day11.last_layer.paths[2] = 0
+    #set $Day11.last_layer.nodes[3] = 0
+    #set $Day11.last_layer.paths[3] = 0
+    #set $Day11.last_layer.nodes[4] = 0
+    #set $Day11.last_layer.paths[4] = 0
+    // 30: 0x707570 pup = pup -> out
+    // 30: 0x677764 gwd = gwd -> out
+    // 30: 0x796f75 you = you -> out
+    #set $Day11.current_layer.nodes[0] = 0x707570
+    #set $Day11.current_layer.paths[0] = 0
+    #set $Day11.current_layer.nodes[1] = 0x677764
+    #set $Day11.current_layer.paths[1] = 0
+    #set $Day11.current_layer.nodes[2] = 0x796f75
+    #set $Day11.current_layer.paths[2] = 0
+    #set $Day11.current_layer.nodes[3] = 0
+    #set $Day11.current_layer.paths[3] = 0
+    #set $Day11.current_layer.nodes[4] = 0
+    #set $Day11.current_layer.paths[4] = 0
+    #set $Day11.target_depth = 7
+    call day11_part2_solve_one_layer
+    #debug 10000
+
+
+    // 27: 0x646163 dac = (dac -> pup) * pup + (dac -> gwd) * gwd + (dac -> you) * you
+    dup // -> $Day11, $Day11
+    #get $Day11.current_layer // -> $Day11, $Day11Layer
+    #set $Day11.last_layer // -> $Day11
+    #debug 11000
+
+    #set $Day11.current_layer.nodes[0] = 0x646163
+    #set $Day11.current_layer.paths[0] = 0
+    #set $Day11.current_layer.nodes[1] = 0
+    #set $Day11.current_layer.paths[1] = 0
+    #set $Day11.current_layer.nodes[2] = 0
+    #set $Day11.current_layer.paths[2] = 0
+    #set $Day11.current_layer.nodes[3] = 0
+    #set $Day11.current_layer.paths[3] = 0
+    #set $Day11.current_layer.nodes[4] = 0
+    #set $Day11.current_layer.paths[4] = 0
+    #set $Day11.target_depth = 3
+    #debug 11001
+    call day11_part2_solve_one_layer
+    #debug 10001
+
+    // 24: 0x777563 wuc = (wuc -> dac) * dac
+    // 24: 0x6f6e63 onc = (onc -> dac) * dac
+    // 24: 0x62736a bsj = (bsj -> dac) * dac
+    dup
+    #get $Day11.current_layer
+    #set $Day11.last_layer
+
+    #set $Day11.current_layer.nodes[0] = 0x777563
+    #set $Day11.current_layer.paths[0] = 0
+    #set $Day11.current_layer.nodes[1] = 0x6f6e63
+    #set $Day11.current_layer.paths[1] = 0
+    #set $Day11.current_layer.nodes[2] = 0x62736a
+    #set $Day11.current_layer.paths[2] = 0
+    #set $Day11.current_layer.nodes[3] = 0
+    #set $Day11.current_layer.paths[3] = 0
+    #set $Day11.current_layer.nodes[4] = 0
+    #set $Day11.current_layer.paths[4] = 0
+    #set $Day11.target_depth = 3
+    call day11_part2_solve_one_layer
+    #debug 10002
+
+    // 18: 0x647872 dxr = (dxr -> wuc) * wuc + (dxr -> onc) * onc + (dxr -> bsj) * bsj
+    // 18: 0x756171 uaq = (uaq -> wuc) * wuc + (uaq -> onc) * onc + (uaq -> bsj) * bsj
+    // 18: 0x687077 hpw = (hpw -> wuc) * wuc + (hpw -> onc) * onc + (hpw -> bsj) * bsj
+    // 18: 0x627a6f bzo = (bzo -> wuc) * wuc + (bzo -> onc) * onc + (bzo -> bsj) * bsj
+    // 18: 0x796572 yer = (yer -> wuc) * wuc + (yer -> onc) * onc + (yer -> bsj) * bsj
+    dup
+    #get $Day11.current_layer
+    #set $Day11.last_layer
+
+    #set $Day11.current_layer.nodes[0] = 0x647872
+    #set $Day11.current_layer.paths[0] = 0
+    #set $Day11.current_layer.nodes[1] = 0x756171
+    #set $Day11.current_layer.paths[1] = 0
+    #set $Day11.current_layer.nodes[2] = 0x687077
+    #set $Day11.current_layer.paths[2] = 0
+    #set $Day11.current_layer.nodes[3] = 0x627a6f
+    #set $Day11.current_layer.paths[3] = 0
+    #set $Day11.current_layer.nodes[4] = 0x796572
+    #set $Day11.current_layer.paths[4] = 0
+    #set $Day11.target_depth = 6
+    call day11_part2_solve_one_layer
+    #debug 10003
+
+    // 12: 0x616278 abx = (abx -> dxr) * dxr + (abx -> uaq) * uaq + (abx -> hpw) * hpw + (abx -> bzo) * bzo + (abx -> yer) * yer
+    // 12: 0x656f62 eob = (eob -> dxr) * dxr + (eob -> uaq) * uaq + (eob -> hpw) * hpw + (eob -> bzo) * bzo + (eob -> yer) * yer
+    // 12: 0x777768 wwh = (wwh -> dxr) * dxr + (wwh -> uaq) * uaq + (wwh -> hpw) * hpw + (wwh -> bzo) * bzo + (wwh -> yer) * yer
+    // 12: 0x717472 qtr = (qtr -> dxr) * dxr + (qtr -> uaq) * uaq + (qtr -> hpw) * hpw + (qtr -> bzo) * bzo + (qtr -> yer) * yer
+    dup
+    #get $Day11.current_layer
+    #set $Day11.last_layer
+
+    #set $Day11.current_layer.nodes[0] = 0x616278
+    #set $Day11.current_layer.paths[0] = 0
+    #set $Day11.current_layer.nodes[1] = 0x656f62
+    #set $Day11.current_layer.paths[1] = 0
+    #set $Day11.current_layer.nodes[2] = 0x777768
+    #set $Day11.current_layer.paths[2] = 0
+    #set $Day11.current_layer.nodes[3] = 0x717472
+    #set $Day11.current_layer.paths[3] = 0
+    #set $Day11.current_layer.nodes[4] = 0
+    #set $Day11.current_layer.paths[4] = 0
+    #set $Day11.target_depth = 6
+    call day11_part2_solve_one_layer
+    #debug 10004
+
+    // 09: 0x666674 fft = (fft -> abx) * abx + (fft -> eob) * eob + (fft -> wwh) * wwh + (fft -> qtr) * qtr
+    dup
+    #get $Day11.current_layer
+    #set $Day11.last_layer
+
+    #set $Day11.current_layer.nodes[0] = 0x666674
+    #set $Day11.current_layer.paths[0] = 0
+    #set $Day11.current_layer.nodes[1] = 0
+    #set $Day11.current_layer.paths[1] = 0
+    #set $Day11.current_layer.nodes[2] = 0
+    #set $Day11.current_layer.paths[2] = 0
+    #set $Day11.current_layer.nodes[3] = 0
+    #set $Day11.current_layer.paths[3] = 0
+    #set $Day11.current_layer.nodes[4] = 0
+    #set $Day11.current_layer.paths[4] = 0
+    #set $Day11.target_depth = 3
+    call day11_part2_solve_one_layer
+    #debug 10005
+
+    // 07: 0x707667 pvg = (pvg -> fft) * fft
+    // 07: 0x756b68 ukh = (ukh -> fft) * fft
+    // 07: 0x6a7963 jyc = (jyc -> fft) * fft
+    // 07: 0x7a6e6c znl = (znl -> fft) * fft
+    // 07: 0x736d6f smo = (smo -> fft) * fft
+    dup
+    #get $Day11.current_layer
+    #set $Day11.last_layer
+
+    #set $Day11.current_layer.nodes[0] = 0x707667
+    #set $Day11.current_layer.paths[0] = 0
+    #set $Day11.current_layer.nodes[1] = 0x756b68
+    #set $Day11.current_layer.paths[1] = 0
+    #set $Day11.current_layer.nodes[2] = 0x6a7963
+    #set $Day11.current_layer.paths[2] = 0
+    #set $Day11.current_layer.nodes[3] = 0x7a6e6c
+    #set $Day11.current_layer.paths[3] = 0
+    #set $Day11.current_layer.nodes[4] = 0x736d6f
+    #set $Day11.current_layer.paths[4] = 0
+    #set $Day11.target_depth = 2
+    call day11_part2_solve_one_layer
+    #debug 10006
+
+    // 00: 0x737672 svr = (svr -> pvg) * pvg + (svr -> ukh) * ukh + (svr -> jyc) * jyc + (svr -> znl) * znl + (svr -> smo) * smo
+    dup
+    #get $Day11.current_layer
+    #set $Day11.last_layer
+
+    #set $Day11.current_layer.nodes[0] = 0x737672
+    #set $Day11.current_layer.paths[0] = 0
+    #set $Day11.current_layer.nodes[1] = 0
+    #set $Day11.current_layer.paths[1] = 0
+    #set $Day11.current_layer.nodes[2] = 0
+    #set $Day11.current_layer.paths[2] = 0
+    #set $Day11.current_layer.nodes[3] = 0
+    #set $Day11.current_layer.paths[3] = 0
+    #set $Day11.current_layer.nodes[4] = 0
+    #set $Day11.current_layer.paths[4] = 0
+    #set $Day11.target_depth = 7
+    call day11_part2_solve_one_layer
+    #debug 10007
+
+.end:
+    // store svr result in $Day11.result
+    // -> $Day11
+    dup
+    #get $Day11.current_layer.paths[0]
+    #set $Day11.result
+}
+
+// Calculate all paths from all nodes within $Day11.current_layer.nodes to all nodes
+// in $Day11.last_layer and stores the respective results in $Day11.current_layer.paths
+// Stack before:
+//     $Day11
+// Stack after:
+//     $Day11
+#proc day11_part2_solve_one_layer {
+    constu 0 // -> $Day11, index
+    #while (dup) < (constu 5) {
+        swap // -> index, $Day11
+        dup // -> index, $Day11, $Day11
+        pick 2 // -> index, $Day11, $Day11, index
+        #getindex $Day11.current_layer.nodes // -> index, $Day11, node
+        call day11_part2_solve_one_node // -> index, $Day11, paths
+        #debug 100
+
+        // store result
+        pick 2
+        #setindex $Day11.current_layer.paths // -> index, $Day11
+
+        // increment index
+        swap
+        constu 1
+        plus // -> $Day11, index
+    }
+
+    drop // -> Day11
+}
+
+// Calculate all paths from the given node to all nodes in $Day11.last_layer,
+// returning the number of paths
+// Stack before:
+//     $Day11, node
+// Stack after:
+//     $Day11, number-of-paths
+#proc day11_part2_solve_one_node {
+    // check if current node exists
+    #if (dup) == (constu 0) {
+        drop // -> $Day11
+        constu 0
+        skip .end
+    }
+    swap // -> node, $Day11
+    constu 0 // -> node, $Day11, paths
+    swap // -> node, paths, $Day11
+
+    constu 0 // -> node, paths, $Day11, index
+    #while (dup) < (constu 5) {
+        // finds number of paths from node -> last_layer[index]
+        rot // -> node, index, paths, $Day11
+        dup // -> node, index, paths, $Day11, $Day11
+        pick 3 // -> node, index, paths, $Day11, $Day11, index
+        #getindex $Day11.last_layer.nodes // -> node, index, paths, $Day11, target_node
+        #set $Day11.target_node // -> node, index, paths, $Day11
+        #set $Day11.result = 0
+        pick 3 // -> node, index, paths, $Day11, node
+        call day11_find_number_of_paths_to_target // -> node, index, paths, $Day11
+
+        // multiply paths with paths of last_layer[index]
+        dup
+        #get $Day11.result // -> node, index, paths, $Day11, result
+        #debug 1000
+        pick 1 // -> node, index, paths, $Day11, result, $Day11
+        pick 4 // -> node, index, paths, $Day11, result, $Day11, index
+        #getindex $Day11.last_layer.paths // -> node, index, paths, $Day11, current-paths, target-paths
+        mul // -> node, index, paths, $Day11, current-paths * target-paths
+
+        // add calculated paths for this index to the total paths
+        swap // -> node, index, paths, current-paths * target-paths, $Day11
+        rot // -> node, index, $Day11, paths, current-paths * target-paths
+        plus // -> node, index, $Day11, paths
+
+
+        // increment index
+        rot // -> node, paths, index, $Day11
+        swap // -> node, paths, $Day11, index
+        constu 1
+        plus // -> node, paths, $Day11, index
+    }
+
+    drop // -> node, paths, $Day11
+    swap // -> node, $Day11, paths
+    rot // -> paths, node, $Day11
+    rot // -> $Day11, paths, node
+    drop // -> $Day11, paths
+.end:
+}
+
+
+
+// Recursive DFS to find the number of baths from current-node to $Day11.target_node,
+// storing the number in $Day11.result
 // Stack before:
 //     $Day11, current-node
 // Stack after:
-//     $Day11
-#proc day11_find_number_of_paths_to_out {
+//     $Day11(result = number-of-paths)
+#proc day11_find_number_of_paths_to_target {
+    // increment depth
+    swap
+    #set $Day11.current_depth += 1
+    swap
+
+    // if there is no current-node, return 0
+    #if (dup) == (constu 0) {
+        drop
+        #set $Day11.result = 0
+        skip .end
+    }
+    // if there is no target_node, return 0
+    #if (pick 1, #get $Day11.target_node) == (constu 0) {
+        drop
+        #set $Day11.result = 0
+        skip .end
+    }
+    // if target_depth exceeded -> abort and return
+    #if (pick 1, #get $Day11.current_depth) > (pick 2, #get $Day11.target_depth) {
+        drop
+        skip .end
+    }
+
     call day11_find_node // -> $Day11, $RodataReader
 
     // while not end-of-line / end-of-file
     #while (call rodata_reader_try_read_char) == (constu ' ') {
         call day11_read_node_name // -> $Day11, $RodataReader, node
 
-        // 0x6f7574 == hex((ord('o') << 16) + (ord('u') << 8) + ord('t'))
-        #if (dup) == (constu 0x6f7574) {
-            // "out" reached -> increment and return
+        #if (dup) == (pick 3, #get $Day11.target_node) {
+            // target_node reached -> increment and return
             drop // -> $Day11, $RodataReader
             drop // -> $Day11
             #set $Day11.result += 1
@@ -83,11 +483,13 @@
 
         swap // -> $Day11, node, $RodataReader
         rot // -> $RodataReader, $Day11, node
-        call day11_find_number_of_paths_to_out // -> $RodataReader, $Day11
+        call day11_find_number_of_paths_to_target // -> $RodataReader, $Day11
         swap // -> $Day11, $RodataReader
     }
     drop // -> $Day11
 .end:
+    // decrement depth
+    #set $Day11.current_depth -= 1
 }
 
 // Stack before:
