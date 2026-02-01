@@ -1,0 +1,336 @@
+#rodata day12_sample {
+    #include_file "days/inputs/day12_sample"
+}
+#macro_if_file_exists "days/inputs/day12_input"
+#rodata day12_input {
+    #include_file "days/inputs/day12_input"
+}
+#macro_end_if_file_exists
+
+// prints lower_bound * 1_000_000 + upper_bound
+#var day12_part1_sample {
+    addr day12_sample
+    addr day12_sample.len
+    call day12
+}
+#macro_if_file_exists "days/inputs/day12_input"
+// prints lower_bound * 1_000_000 + upper_bound
+#var day12_part1 {
+    addr day12_input
+    addr day12_input.len
+    call day12
+}
+#macro_end_if_file_exists
+
+// Day12 is one of these days where the challenge seems quite interesting.
+// It appears like an NP-hard problem, which might have a few optimizations
+// here and there. A complex problem with lots of different solutions.
+// But then you look at the input. And you realize that the cake is a lie.
+// Just like in AoC 2023 Day8 Part2, the input of today is structured in a way
+// that you can practically ignore the actual problem.
+// It doesn't matter. Noone cares. In fact it's the author's intention.
+// Instead of solving a nice puzzle, possibly the hardest and most complex
+// puzzle of this year, you don't need to do anything.
+//
+// You start implementing trivial limits of the input.
+// If a field doesn't have enough space for the number of occupied tiles of the
+// pieces, it can immediately be rejected trivially (upper bound).
+// As all pieces are 3x3, if a field size (with width & height rounded down to
+// the nearest multiple of 3) is larger than the number of pieces times 9,
+// the pieces fit trivially (lower bound).
+// For all other cases you need to find a proper solution to the original
+// problem afterwards.
+//
+// After implementing the first restriction, you put your result into
+// AoC, to confirm that the actual solution is below your upper bound.
+// Only to immediately be greeted by "That's the right answer!".
+//
+// You are flabbergasted, but decide to implement the lower bound anyway.
+// You even have a bug that doesn't account for width and height being a
+// multiple of 3, meaning two 3x3 pieces fit a 5x5 field according to your
+// algorithm. But it doesn't matter, you get the same result as the upper bound.
+// You notice and fix the bug, yet again getting the same result.
+// Heck, apparently this trick was even made idiot- and bug-proof.
+//
+// But what about the sample? You run the code against the sample,
+// and you get a different result for the upper and lower bound. A wrong result.
+// Something that requires you to actually implement a proper solution.
+// But only for the sample. Nobody cares about the sample.
+//
+// Because for the actual input, upon which all points and stars are based,
+// the upper bound is equal to the lower bound. The algorithm to solve this
+// seemingly NP-hard problem is to just count squares. If it fits, it sits.
+//
+// That's it.
+// All there is.
+// All there'll ever be.
+//
+// Emptiness.
+
+#type $Day12 {
+    pieces: [$u64; 6],
+    lower_bound: $u64,
+    upper_bound: $u64,
+}
+#type $Day12Line {
+    width: $u64,
+    height: $u64,
+    piece_count: [$u64; 6],
+}
+
+// Stack before:
+//     input_addr, input_len_addr
+// Stack after:
+//     result
+#proc day12 {
+    #create $Day12 {
+        pieces: [0; 6],
+        lower_bound: 0,
+        upper_bound: 0,
+    } // -> input_addr, input_len_addr, $Day12
+    rot
+    call rodata_reader_new // -> $Day12, $RodataReader
+
+
+    call day12_parse_pieces // -> $Day12, $RodataReader
+    #debug 1337
+
+    // iterate over all lines
+    #while (call rodata_reader_is_eof) != (constu 1) {
+        call day12_parse_line // -> $Day12, $RodataReader, $Day12Line
+        swap // -> $Day12, $Day12Line, $RodataReader
+        rot // -> $RodataReader, $Day12, $Day12Line
+        #debug 100
+
+        call day12_check_lower_bound // -> $RodataReader, $Day12, $Day12Line
+        #debug 101
+
+        call day12_check_upper_bound // -> $RodataReader, $Day12, $Day12Line
+        #debug 102
+
+        drop // -> $RodataReader, $Day12
+        swap // -> $Day12, $RodataReader
+    }
+    drop // -> $Day12
+    dup
+    #get $Day12.lower_bound // -> $Day12, lower_bound
+    constu 1_000_000
+    mul // -> $Day12, lower_bound
+    swap // -> lower_bound<<, $Day12
+    #get $Day12.upper_bound // -> lower_bound<<, upper_bound
+    #debug 42
+    plus
+}
+
+// Check if the pieces fit into the field as 3x3 blobs.
+// Increments $Day12.lower_bound if that's the case.
+// Stack before:
+//     $Day12, $Day12Line
+// Stack after:
+//     $Day12, $Day12Line
+#proc day12_check_lower_bound {
+    // calculate field size, rounding down width & height to multiple of 3
+    dup
+    #get $Day12Line.width // -> $Day12, $Day12Line, width
+    constu 3
+    div // -> $Day12, $Day12Line, width/3
+    constu 3
+    mul // -> $Day12, $Day12Line, width/3*3
+    pick 1
+    #get $Day12Line.height // -> $Day12, $Day12Line, width/3*3, height
+    constu 3
+    div // -> $Day12, $Day12Line, width/3*3, height/3
+    constu 3
+    mul // -> $Day12, $Day12Line, width/3*3, height/3*3
+    mul // -> $Day12, $Day12Line, size
+
+    // count number of pieces
+    constu 0 // -> $Day12, $Day12Line, size, count
+    constu 0 // -> $Day12, $Day12Line, size, count, index
+    #while (dup) < (constu 6) {
+        // count += $Day12Line[index]
+        pick 3 // -> $Day12, $Day12Line, size, count, index, $Day12Line
+        pick 1 // -> $Day12, $Day12Line, size, count, index, $Day12Line, index
+        #getindex $Day12Line.piece_count // -> $Day12, $Day12Line, size, count, index, count
+        swap // -> $Day12, $Day12Line, size, count, count, index
+        rot // -> $Day12, $Day12Line, size, index, count, count
+        plus // -> $Day12, $Day12Line, size, index, count
+
+        // index += 1
+        swap // -> $Day12, $Day12Line, size, count, index
+        constu 1
+        plus
+    }
+    drop // -> $Day12, $Day12Line, size, count
+
+    // num_tiles = count * 9
+    constu 9
+    mul // -> $Day12, $Day12Line, size, num_tiles
+
+    // check size and optionally increment result
+    // if size >= num_tiles
+    #debug 1000
+    #if () >= () {
+        swap // -> $Day12Line, $Day12
+        #set $Day12.lower_bound += 1
+        swap // -> $Day12, $Day12Line
+    }
+}
+
+// Check if the number of occupied tiles fit into the field, incrementing
+// $Day12.upper_bound if that's the case.
+// Stack before:
+//     $Day12, $Day12Line
+// Stack after:
+//     $Day12, $Day12Line
+#proc day12_check_upper_bound {
+    constu 0 // -> $Day12, $Day12Line, num_tiles
+    constu 0 // -> $Day12, $Day12Line, num_tiles, index
+    #while (dup) < (constu 6) {
+        // num_tiles += $Day12.pieces[index] * $Day12Line.piece_count[index]
+        swap // -> $Day12, $Day12Line, index, num_tiles
+        pick 3 // -> $Day12, $Day12Line, index, num_tiles, $Day12
+        pick 2 // -> $Day12, $Day12Line, index, num_tiles, $Day12, index
+        #getindex $Day12.pieces // -> $Day12, $Day12Line, index, num_tiles, piece
+        pick 3 // -> $Day12, $Day12Line, index, num_tiles, piece, $Day12Line
+        pick 3 // -> $Day12, $Day12Line, index, num_tiles, piece, $Day12Line, index
+        #getindex $Day12Line.piece_count // -> $Day12, $Day12Line, index, num_tiles, piece, count
+        mul // -> $Day12, $Day12Line, index, num_tiles, required-tiles-for-current-piece
+        plus // -> $Day12, $Day12Line, index, num_tiles
+
+        // index += 1
+        swap // -> $Day12, $Day12Line, num_tiles, index
+        constu 1
+        plus
+    }
+    drop // -> $Day12, $Day12Line, num_tiles
+
+    // size = $Day12Line.width * $Day12Line.height
+    pick 1 // -> $Day12, $Day12Line, num_tiles, $Day12Line
+    #get $Day12Line.width // -> $Day12, $Day12Line, num_tiles, width
+    pick 2 // -> $Day12, $Day12Line, num_tiles, width, $Day12Line
+    #get $Day12Line.height // -> $Day12, $Day12Line, num_tiles, width, height
+    mul // -> $Day12, $Day12Line, num_tiles, size
+
+    // $Day12.result += num_tiles <= size
+    // if num_tiles <= size
+    #if () <= () {
+        swap // -> $Day12Line, $Day12
+        #set $Day12.upper_bound += 1
+        swap // -> $Day12, $Day12Line
+    }
+}
+
+// Parse a region-line into a $Day12Line
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, $Day12Line
+#proc day12_parse_line {
+    #create $Day12Line {
+        width: 0,
+        height: 0,
+        piece_count: [0; 6],
+    } // -> $RodataReader, $Day12Line
+
+    // parse size
+    swap // -> $Day12Line, $RodataReader
+    call rodata_reader_next_number // -> $Day12Line, $RodataReader, width
+    swap // -> $Day12Line, width, $RodataReader
+    rot // -> $RodataReader, $Day12Line, width
+    #set $Day12Line.width // -> $RodataReader, $Day12Line
+    swap // -> $Day12Line, $RodataReader
+    call rodata_reader_next_number // -> $Day12Line, $RodataReader, height
+    swap // -> $Day12Line, height, $RodataReader
+    rot // -> $RodataReader, $Day12Line, height
+    #set $Day12Line.height // -> $RodataReader, $Day12Line
+
+    // parse numbers
+    swap // -> $Day12Line, $RodataReader
+    constu 0 // -> $Day12Line, $RodataReader, index
+    #while (dup) < (constu 6) {
+        // parse number
+        rot // -> index, $Day12Line, $RodataReader
+        call rodata_reader_next_number // -> index, $Day12Line, $RodataReader, count
+
+        // $Day12Line.piece_count[index] = count
+        swap
+        rot // -> index, $RodataReader, $Day12Line, count
+        pick 3
+        #setindex $Day12Line.piece_count // -> index, $RodataReader, $Day12Line
+
+        // index += 1
+        rot // -> $Day12Line, index, $RodataReader
+        swap // -> $Day12Line, $RodataReader, index
+        constu 1
+        plus
+    }
+    drop // -> $Day12Line, $RodataReader
+    swap // -> $RodataReader, $Day12Line
+}
+
+// Parse all 5 pieces, storing their sizes in $Day12.pieces
+// Stack before:
+//     $Day12, $RodataReader
+// Stack after:
+//     $Day12, $RodataReader
+#proc day12_parse_pieces {
+    constu 0 // -> $Day12, $RodataReader, index
+    #while (dup) < (constu 6) {
+        // parse piece
+        rot // -> index, $Day12, $RodataReader
+        call day12_parse_piece // -> index, $Day12, $RodataReader, size
+
+        // $Day12.pices[index] = size
+        swap // -> index, $Day12, size, $RodataReader
+        rot // -> index, $RodataReader, $Day12, size
+        pick 3 // -> index, $RodataReader, $Day12, size, index
+        #setindex $Day12.pieces // -> index, $RodataReader, $Day12
+
+        // index += 1
+        rot // -> $Day12, index, $RodataReader
+        swap // -> $Day12, $RodataReader, index
+        constu 1
+        plus
+    }
+    drop // -> $Day12, $RodataReader
+}
+
+// Parse a piece, returning the number of squares it takes up
+// Stack before:
+//     $RodataReader
+// Stack after:
+//     $RodataReader, size
+#proc day12_parse_piece {
+    // skip "<num>:\n"
+    call rodata_reader_next_non_whitespace_char
+    drop
+    call rodata_reader_go_to_next_line
+    drop
+
+    constu 0 // -> $RodataReader, size
+    swap // -> size, $RodataReader
+
+    // all pieces are 3x3 tiles, each line followed with \n -> read 12 chars
+    constu 0 // -> size, $RodataReader, index
+    #while (dup) < (constu 12) {
+        // read char
+        rot // -> index, size, $RodataReader
+        call rodata_reader_read_char // -> index, size, $RodataReader, char
+
+        // if char == '#' { size += 1 }
+        swap // -> index, size, char, $RodataReader
+        rot // -> index, $RodataReader, size, char
+        constu '#'
+        eq
+        plus // -> index, $RodataReader, size
+
+        // index += 1
+        rot // -> size, index, $RodataReader
+        swap // -> size, $RodataReader, index
+        constu 1
+        plus
+    }
+    drop // -> size, $RodataReader
+    swap // -> $RodataReader, size
+}
