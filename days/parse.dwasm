@@ -443,8 +443,9 @@
 }
 
 // Return a reader starting at the given x and y
-// If x is larger than the width, the reader will be at the end of line y.
-// If y is larger than the height, the reader will be at the end of the input.
+// If x > width, the reader will be at the end of line y.
+// If y > height, the reader will be at the end of the input.
+// If x < 0 or y < 0, the reader will be at the end of the input.
 // Stack before:
 //     $RodataReader2D, x, y
 // Stack after:
@@ -457,18 +458,16 @@
         #get $RodataReader2D.width
         swap // -> $RodataReader2D, width, y
     } #else #if (pick 1) < (constu 0) {
-        constu 72980498240389
-        call panic
+        drop // -> $RodataReader2D, x
+        pick 1 // -> $RodataReader2D, x, $RodataReader2D
+        #get $RodataReader2D.height // -> $RodataReader2D, x, height
     }
-    #if (pick 2, #get $RodataReader2D.height) <= (pick 1) {
+    #if (pick 2, #get $RodataReader2D.height) <= (pick 1) or (pick 1) < (constu 0) {
         drop // -> $RodataReader2D, x
         drop // -> $RodataReader2D
         constu 0 // -> $RodataReader2D, x=0
         pick 1
         #get $RodataReader2D.height // -> $RodataReader2D, x=0, height
-    } #else #if (dup) < (constu 0) {
-        constu 439287427894327
-        call panic
     }
 
     // -> $RodataReader2D, x, y
