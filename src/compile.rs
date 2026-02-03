@@ -47,7 +47,12 @@ fn first_pass<'a>(program: &mut DwarfProgram, items: &Vec<Item<'a>>) -> GlobalCo
     global_ctx.type_dies.insert(Type::Primitive(Primitive::F64), program.add_base_type("f64", 8, gimli::DW_ATE_float));
     for item in items {
         match item {
-            Item::Rodata { .. } => (),
+            Item::Rodata { name, def_data } => {
+                let data: Vec<u8> = def_data.iter().flat_map(DefineData::to_vec).collect();
+                let len_name = format!("{name}.len");
+                program.add_rodata_data(len_name.clone(), data.len().to_le_bytes().to_vec());
+                program.add_rodata_data(name.to_owned(), data);
+            }
             Item::Type(custom_type) => {
                 assert!(global_ctx.custom_types.insert(custom_type.name, custom_type.clone()).is_none());
                 let entry = program.create_base_type(custom_type.name.to_string(), gimli::DW_ATE_unsigned);
@@ -69,12 +74,7 @@ fn first_pass<'a>(program: &mut DwarfProgram, items: &Vec<Item<'a>>) -> GlobalCo
 fn second_pass<'a>(program: &mut DwarfProgram, global_ctx: &mut GlobalContext<'a>, items: Vec<Item<'a>>) {
     for item in items {
         match item {
-            Item::Rodata { name, def_data } => {
-                let data: Vec<u8> = def_data.iter().flat_map(DefineData::to_vec).collect();
-                let len_name = format!("{name}.len");
-                program.add_rodata_data(len_name.clone(), data.len().to_le_bytes().to_vec());
-                program.add_rodata_data(name.to_owned(), data);
-            }
+            Item::Rodata { .. } => (),
             Item::Type(CustomType { name, fields: _ }) => {
                 let size = type_size(Type::Custom(name), global_ctx);
                 assert!(size <= 255, "type {name} is larger than 255 bytes");
