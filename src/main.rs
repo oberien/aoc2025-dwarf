@@ -5,6 +5,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use clap::Parser;
 use ignore::Walk;
+use minijinja::Environment;
 use crate::compile::compile;
 use crate::parse::parse;
 use crate::dwarf_program::DwarfProgram;
@@ -30,6 +31,7 @@ struct Args {
 enum Command {
     #[default]
     Compile,
+    Expand,
     Run {
         #[clap(short = 'x')]
         hex: bool,
@@ -39,6 +41,8 @@ enum Command {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Args { file, output_file, debug, command } = Args::parse();
+
+    // load file(s)
     let mut src = String::new();
     match file {
         Some(path) => {
@@ -58,6 +62,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .read_to_string(&mut src).unwrap_or_else(|e| panic!("can't read file {}: {e}", file.path().display()));
         }
     }
+
+    // apply minijinja templating
+    let mut env = Environment::new();
+    env.add_template("hello", &src).unwrap();
+    let tmpl = env.get_template("hello").unwrap();
+    let src = tmpl.render(()).unwrap();
+    if matches!(command, Some(Command::Expand)) {
+        println!("{}", src);
+        return Ok(());
+    }
+
     let instructions = parse(&src);
     if debug {
         for inst in &instructions {
@@ -78,7 +93,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 true => println!("{res:#x}"),
                 false => println!("{res}"),
             }
-        }
+        },
+        Command::Expand => unreachable!("handled before"),
     }
 
     Ok(())

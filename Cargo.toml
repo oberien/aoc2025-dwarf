@@ -19,3 +19,6 @@ minijinja = "2.15.1"
 [dev-dependencies]
 tempfile = "3.23.0"
 num-bigint = "0.4.6"
+
+[profile.release]
+debug = "full"
