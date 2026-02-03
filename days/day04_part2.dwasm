@@ -17,6 +17,8 @@
 
 {% set day4_sample_width = 10 %}
 {% set day4_sample_height = 10 %}
+{% set day4_input_width = 139 %}
+{% set day4_input_height = 139 %}
 
 #type $Day4Part2 {
     x: $u16,
@@ -26,23 +28,20 @@
     removed_rolls: $u32,
 }
 
-#type $Day4Part2SampleLine {
+{% macro day04_part2_macro(field_width, field_height, name) %}
+
+#type $Day4Part2{{name}}Line {
     row_index: $u8,
     padding: $u8,
-    data: [$u8; {{day4_sample_width}}]
-}
-
-#proc day4_part2_input {
-    call panic
+    data: [$u8; {{field_width}}]
 }
 
 // Stack before:
 //     $RodataReader
 // Stack after:
 //     $Day4Part2
-#proc day4_part2_sample {
-    call day4_part2_sample_load_data // -> field
-    #debug 1336
+#proc day4_part2_{{name}} {
+    call day4_part2_{{name}}_load_data // -> field
     #create $Day4Part2 {
         x: 0,
         y: 0,
@@ -50,42 +49,35 @@
         changed: 0,
         removed_rolls: 0,
     } // -> field, $Day4Part2
-//    pick 10
-//    swap
-//    pick 10
-//    swap
-//    #debug 1337
-    call day4_part2_sample_do_everything
-    #debug 42
+    call day4_part2_{{name}}_do_everything
 }
 
 // Fixpoint iteration over do_field until the field doesn't change.
 // Expects the field with the lowest-row at the top and the rest descending
 // Stack before:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
+//     $Day4Part2Line x %field_height, $Day4Part2
 // Stack after:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
-#proc day4_part2_sample_do_everything {
+//     $Day4Part2Line x %field_height, $Day4Part2
+#proc day4_part2_{{name}}_do_everything {
     #set $Day4Part2.changed = 1
     #while (dup, #get $Day4Part2.changed) != (constu 0) {
-        call day4_part2_sample_do_field
-        #debug 42
+        call day4_part2_{{name}}_do_field
     }
 }
 
 // Iterate over all rows of the field and modify them if possible.
 // Expects the field with the lowest-row at the top and the rest descending
 // Stack before:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
+//     $Day4Part2Line x %field_height, $Day4Part2
 // Stack after:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
-#proc day4_part2_sample_do_field {
+//     $Day4Part2Line x %field_height, $Day4Part2
+#proc day4_part2_{{name}}_do_field {
     #set $Day4Part2.changed = 0
     #set $Day4Part2.y = 0
-    #while (dup, #get $Day4Part2.y) < (constu {{ day4_sample_height }}) {
-        pick {{ day4_sample_height-1 + 1 }}
+    #while (dup, #get $Day4Part2.y) < (constu {{ field_height }}) {
+        pick {{ field_height-1 + 1 }}
         swap // -> field, $Day4Part2
-        call day4_part2_sample_do_row
+        call day4_part2_{{name}}_do_row
         #set $Day4Part2.y += 1
     }
 
@@ -94,13 +86,13 @@
 // Iterate over all cells of a row and modify them if possible.
 // Expects row y to be at the top of the field.
 // Stack before:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
+//     $Day4Part2Line x %field_height, $Day4Part2
 // Stack after:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
-#proc day4_part2_sample_do_row {
+//     $Day4Part2Line x %field_height, $Day4Part2
+#proc day4_part2_{{name}}_do_row {
     #set $Day4Part2.x = 0
-    #while (dup, #get $Day4Part2.x) < (constu {{ day4_sample_width }}) {
-        call day4_part2_sample_do_cell
+    #while (dup, #get $Day4Part2.x) < (constu {{ field_width }}) {
+        call day4_part2_{{name}}_do_cell
         #set $Day4Part2.x += 1
     }
 }
@@ -109,15 +101,15 @@
 // x,y if it's reachable (i.e. number of rolls < 4).
 // Expects row y to be at the top of the field.
 // Stack before:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
+//     $Day4Part2Line x %field_height, $Day4Part2
 // Stack after:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
-#proc day4_part2_sample_do_cell {
+//     $Day4Part2Line x %field_height, $Day4Part2
+#proc day4_part2_{{name}}_do_cell {
     // get current cell
     pick 1 // -> field, $Day4Part2, current-row
     pick 1
     #get $Day4Part2.x // -> field, $Day4Part2, current-row, x
-    #getindex $Day4Part2SampleLine.data // -> field, $Day4Part2, current-cell
+    #getindex $Day4Part2{{name}}Line.data // -> field, $Day4Part2, current-cell
 
     // check if current cell is a paper roll and needs to be handled
     #if () == (constu '@') {
@@ -127,19 +119,17 @@
                 {% if dx != 0 or dy != 0 %}
                     consts {{ dx }}
                     consts {{ dy }} // -> field, $Day4Part2, dx, dy
-                    call day4_part2_sample_do_delta
-//                    #debug 69
+                    call day4_part2_{{name}}_do_delta
                 {% endif %}
             {% endfor %}
         {% endfor %}
         // -> field, $Day4Part2
-//        #debug 100
         #if (dup, #get $Day4Part2.current_roll_count) < (constu 4) {
             swap // -> field\row, $Day4Part2, row
             constu '.' // -> field\row, $Day4Part2, row, '.'
             pick 2
             #get $Day4Part2.x // -> field\row, $Day4Part2, row, '.', index
-            #setindex $Day4Part2SampleLine.data // -> field\row, $Day4Part2, row
+            #setindex $Day4Part2{{name}}Line.data // -> field\row, $Day4Part2, row
             swap // -> field, $Day4Part2
             #set $Day4Part2.changed = 1
             #set $Day4Part2.removed_rolls += 1
@@ -151,10 +141,10 @@
 // paper roll.
 // Expects row y to be at the top of the field.
 // Stack before:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2, dx, dy
+//     $Day4Part2Line x %field_height, $Day4Part2, dx, dy
 // Stack after:
-//     $Day4Part2SampleLine x %day4_sample_height, $Day4Part2
-#proc day4_part2_sample_do_delta {
+//     $Day4Part2Line x %field_height, $Day4Part2
+#proc day4_part2_{{name}}_do_delta {
     // get x
     pick 2
     #get $Day4Part2.x // -> field, $Day4Part2, dx, dy, x
@@ -185,14 +175,14 @@
         pick 4
     } #else #if (dup) == (constu 1) {
         // currently lowest row
-        #if (pick 1) == (constu {{ day4_sample_height - 1 }}) {
+        #if (pick 1) == (constu {{ field_height - 1 }}) {
             drop // -> field, $Day4Part2, x, y
             drop // -> field, $Day4Part2, x
             drop // -> field, $Day4Part2
             skip .end
         }
         // pick oldest row in field
-        pick {{ day4_sample_height-1 + 4 }}
+        pick {{ field_height-1 + 4 }}
     } #else {
         constu 78978029327890
         call panic
@@ -204,7 +194,7 @@
     drop // -> field, $Day4Part2, x, row
 
     // check dx for out-of-bounds
-    #if (pick 1) < (constu 0) or (pick 2) >= (constu {{ day4_sample_width }}) {
+    #if (pick 1) < (constu 0) or (pick 2) >= (constu {{ field_width }}) {
         // left of row or right of row
         drop
         drop
@@ -212,8 +202,7 @@
     }
 
     swap // -> field, $Day4Part2, row, x
-    #getindex $Day4Part2SampleLine.data // -> field, $Day4Part2, cell
-//    #debug 1000
+    #getindex $Day4Part2{{name}}Line.data // -> field, $Day4Part2, cell
     #if () == (constu '@') {
         #set $Day4Part2.current_roll_count += 1
     }
@@ -224,35 +213,39 @@
 // Stack before:
 //     $RodataReader
 // Stack after:
-//     $Day4Part2SampleLine x %day4_sample_height
-#proc day4_part2_sample_load_data {
-    {% for row_index in range(day4_sample_height) %}
-        #create $Day4Part2SampleLine {
+//     $Day4Part2Line x %field_height
+#proc day4_part2_{{name}}_load_data {
+    {% for row_index in range(field_height) %}
+        #create $Day4Part2{{name}}Line {
             row_index: {{ row_index + 1 }},
             padding: 0,
-            data: [0; {{day4_sample_width}}],
-        } // -> $RodataReader, $Day4Part2SampleLine
-        swap // -> $Day4Part2SampleLine, $RodataReader
+            data: [0; {{field_width}}],
+        } // -> $RodataReader, $Day4Part2Line
+        swap // -> $Day4Part2Line, $RodataReader
 
-        constu 0 // -> $Day4Part2SampleLine, $RodataReader, index
-        #while (dup) < (constu {{day4_sample_width}}) {
-            rot // -> index, $Day4Part2SampleLine, $RodataReader
-            call rodata_reader_read_char // -> index, $Day4Part2SampleLine, $RodataReader, char
-            swap // -> index, $Day4Part2SampleLine, char, $RodataReader
-            rot // -> index, $RodataReader, $Day4Part2SampleLine, char
-            pick 3 // -> index, $RodataReader, $Day4Part2SampleLine, char, index
-            #setindex $Day4Part2SampleLine.data // -> index, $RodataReader, $Day4Part2SampleLine
-            rot // -> $Day4Part2SampleLine, index, $RodataReader
-            swap // -> $Day4Part2SampleLine, $RodataReader, index
+        constu 0 // -> $Day4Part2Line, $RodataReader, index
+        #while (dup) < (constu {{field_width}}) {
+            rot // -> index, $Day4Part2Line, $RodataReader
+            call rodata_reader_read_char // -> index, $Day4Part2Line, $RodataReader, char
+            swap // -> index, $Day4Part2Line, char, $RodataReader
+            rot // -> index, $RodataReader, $Day4Part2Line, char
+            pick 3 // -> index, $RodataReader, $Day4Part2Line, char, index
+            #setindex $Day4Part2{{name}}Line.data // -> index, $RodataReader, $Day4Part2Line
+            rot // -> $Day4Part2Line, index, $RodataReader
+            swap // -> $Day4Part2Line, $RodataReader, index
 
             // index += 1
             constu 1
             plus
         }
-        drop // -> $Day4Part2SampleLine, $RodataReader
+        drop // -> $Day4Part2Line, $RodataReader
         call rodata_reader_go_to_next_line
         drop
     {% endfor %}
-    drop // -> $Day4Part2SampleLine x %day4_sample_height
+    drop // -> $Day4Part2Line x %field_height
 }
 
+{% endmacro %}
+
+{{ day04_part2_macro(day4_sample_width, day4_sample_height, 'sample') }}
+{{ day04_part2_macro(day4_input_width, day4_input_height, 'input') }}
